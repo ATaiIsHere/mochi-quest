@@ -1,0 +1,12 @@
+{
+  "name": "mochi-quest",
+  "version": "0.1.0",
+  "description": "AI-powered personal growth coaching system",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @mochi-quest/server dev",
+    "start": "pnpm --filter @mochi-quest/server start",
+    "start:daemon": "pnpm --filter @mochi-quest/server start:daemon"
+  }
+}

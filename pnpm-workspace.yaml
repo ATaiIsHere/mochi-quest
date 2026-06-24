@@ -1,0 +1,7 @@
+packages:
+  - 'packages/*'
+
+# Allow native builds
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
