@@ -1,10 +1,13 @@
 import Database from 'better-sqlite3';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
 
-const DB_DIR = join(homedir(), '.mochi-quest');
-const DB_PATH = join(DB_DIR, 'data.db');
+const DB_PATH = resolve(
+  process.env.MOCHI_QUEST_DB
+    ?? join(process.env.MOCHI_QUEST_DATA_DIR ?? join(homedir(), '.mochi-quest'), 'data.db'),
+);
+const DB_DIR = dirname(DB_PATH);
 
 let _db: Database.Database | null = null;
 

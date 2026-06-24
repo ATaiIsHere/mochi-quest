@@ -17,7 +17,7 @@ switch (command) {
     if (isDaemon) {
       console.log('Starting Mochi Quest in daemon mode...');
     }
-    startApiServer(3030);
+    startApiServer();
     startScheduler();
     await startMcpServer();
     break;

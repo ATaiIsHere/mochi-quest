@@ -78,7 +78,7 @@ cd packages/web && pnpm build
 ### Run
 
 ```bash
-# Start everything (MCP + REST API + scheduler)
+# Start everything (MCP + REST API + scheduler + built Web UI)
 node packages/server/dist/index.js start
 
 # Or as a background daemon
@@ -86,6 +86,16 @@ node packages/server/dist/index.js start --daemon
 ```
 
 The web dashboard is available at **http://localhost:3030**.
+
+### Docker
+
+```bash
+docker compose up -d --build
+```
+
+The Docker server stores SQLite data in the `mochi_quest_data` volume and serves the built Web UI, REST API, scheduler, and MCP entrypoint from one container.
+
+Full deployment notes: [`docs/deployment.md`](docs/deployment.md).
 
 ### Connect to your AI agent
 

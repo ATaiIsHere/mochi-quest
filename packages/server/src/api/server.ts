@@ -1,5 +1,8 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
+import { readFile, stat } from 'node:fs/promises';
+import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { subscribeToSse } from '../db/queries/replan.js';
 import { listGoals, getGoal, createGoal, updateGoal, setGoalStatus } from '../db/queries/goals.js';
 import { getActivePlan, getPlanHistory, getReplanPending } from '../db/queries/plans.js';
@@ -16,6 +19,53 @@ import { getStreak } from '../db/queries/streaks.js';
 
 const app = new Hono();
 
+const WEB_DIST_DIR = resolve(
+  process.env.MOCHI_QUEST_WEB_DIST
+    ?? join(dirname(fileURLToPath(import.meta.url)), '../../../web/dist'),
+);
+
+const MIME_TYPES: Record<string, string> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.ico': 'image/x-icon',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain; charset=utf-8',
+  '.webp': 'image/webp',
+};
+
+function safeWebPath(requestPath: string): string | null {
+  try {
+    const decoded = decodeURIComponent(requestPath);
+    const normalized = normalize(decoded).replace(/^(\.\.(\/|\\|$))+/, '');
+    const filePath = resolve(WEB_DIST_DIR, normalized);
+    return filePath === WEB_DIST_DIR || filePath.startsWith(`${WEB_DIST_DIR}${sep}`) ? filePath : null;
+  } catch {
+    return null;
+  }
+}
+
+async function serveWebFile(requestPath: string): Promise<Response> {
+  const filePath = safeWebPath(requestPath);
+  if (!filePath) return new Response('Not found', { status: 404 });
+
+  try {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) return new Response('Not found', { status: 404 });
+    const content = await readFile(filePath);
+    return new Response(new Uint8Array(content), {
+      headers: {
+        'Content-Type': MIME_TYPES[extname(filePath)] ?? 'application/octet-stream',
+      },
+    });
+  } catch {
+    return new Response('Not found', { status: 404 });
+  }
+}
+
 // CORS for local dev
 app.use('*', async (c, next) => {
   c.header('Access-Control-Allow-Origin', 'http://localhost:5173');
@@ -24,6 +74,8 @@ app.use('*', async (c, next) => {
   if (c.req.method === 'OPTIONS') return new Response('', { status: 204 });
   await next();
 });
+
+app.get('/health', (c) => c.json({ ok: true }));
 
 // SSE endpoint for real-time updates
 app.get('/api/events', (c) => {
@@ -192,7 +244,16 @@ app.get('/api/goals/:id/progress', (c) => {
   });
 });
 
-export function startApiServer(port = 3030): void {
+// Built web dashboard. API routes stay JSON-only; all other GET routes fall back
+// to index.html so the React router works in production and Docker.
+app.get('/assets/*', (c) => serveWebFile(c.req.path.slice(1)));
+app.get('/favicon.ico', () => serveWebFile('favicon.ico'));
+app.get('*', (c) => {
+  if (c.req.path.startsWith('/api/')) return c.json({ error: 'Not found' }, 404);
+  return serveWebFile('index.html');
+});
+
+export function startApiServer(port = Number.parseInt(process.env.PORT ?? process.env.MOCHI_QUEST_PORT ?? '3030', 10)): void {
   serve({ fetch: app.fetch, port }, () => {
     console.log(`Mochi Quest UI available at http://localhost:${port}`);
   });

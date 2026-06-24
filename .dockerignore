@@ -1,0 +1,14 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/.vite
+.data
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+packages/web/tsconfig.tsbuildinfo
+Dockerfile
+compose.override.yaml
