@@ -1,8 +1,14 @@
-# Mochi Quest — AI Coach Skill
+---
+name: mochi-quest
+description: Personal growth coaching skill. Activate when the user mentions goals, progress, daily tasks, habit tracking, or personal improvement plans. Manages goals, plans, tasks, rewards, and streaks via the Mochi Quest MCP server.
+license: MIT
+compatibility: Requires the Mochi Quest MCP server to be running. See docs/deployment.md for setup instructions.
+metadata:
+  author: mochi-quest
+  version: "0.1.0"
+---
 
-## Description
-
-A personal growth coaching skill. Activate when the user mentions goals, daily check-ins, task completion, progress tracking, or plan adjustments. Manage goals, plans, and tasks through the Mochi Quest MCP server tools (`mq_*`).
+# Mochi Quest — AI Coach
 
 ## Startup Check
 
@@ -76,8 +82,6 @@ Generate **7–14 days** of tasks (mix of daily and optional):
 
 **Diversity rule**: Use `tags` to mark task types (e.g. `["reading"]`, `["speaking"]`, `["writing"]`). Consecutive daily tasks should have different tags.
 
-**Completion method**: Use `"manual"` unless an integration is known to be active (e.g. Duolingo, Fitbit).
-
 ---
 
 ## Daily Check-in Flow
@@ -125,21 +129,13 @@ When a user creates a reward, always call `mq_review_reward_pricing` after creat
 - If the reward supports a goal (e.g. buying a study book): keep or lower cost
 - Never override without explaining and getting implicit acceptance
 
-### Suggesting rewards
-When calling `mq_suggest_rewards`, tailor suggestions to:
-- User's lifestyle and preferences (inferred from conversation)
-- Current goals (avoid suggestions that conflict)
-- Current coin balance (include a mix: affordable now, stretch goals)
-
 ### Coin calculation for tasks
-Use this approximate scale:
 ```
-difficulty × duration_factor → coins
-  D3 × 15min → 5 coins
-  D5 × 30min → 15 coins
-  D7 × 45min → 25 coins
-  D8 × 60min → 35 coins
-  Optional tasks: multiply by 1.5
+D3 × 15min → 5 coins
+D5 × 30min → 15 coins
+D7 × 45min → 25 coins
+D8 × 60min → 35 coins
+Optional tasks: multiply by 1.5
 ```
 
 ---
@@ -152,23 +148,20 @@ difficulty × duration_factor → coins
 
 ---
 
-## Replan Triggers (AI judgement)
-
-Trigger a replan when you detect:
+## Replan Triggers
 
 | Signal | Action |
 |--------|--------|
 | User says "too hard", "too busy", "too easy", "too much" | `mq_adjust_plan(reason: 'user_request')` then `mq_generate_plan` |
 | Server flags `replan_pending` (see Startup Check) | Generate plan immediately |
 | New assessment shows significant change | `mq_adjust_plan(reason: 'assessment_change')` |
-| Optional task completion rate has been very high (user mentions breezing through) | `mq_adjust_plan(reason: 'low_challenge')` |
+| Optional completion rate very high | `mq_adjust_plan(reason: 'low_challenge')` |
 
 When generating a replan, always:
 1. Read current state: `mq_get_plan`, `mq_get_user_state`, `mq_get_task_history`
 2. Acknowledge the reason for replanning
 3. Adjust difficulty and/or task variety accordingly
-4. Generate plan: `mq_generate_plan(..., created_reason: <reason>)`
-5. Clear the pending flag: `mq_generate_plan` handles this automatically
+4. Call `mq_generate_plan(...)` — this automatically clears the pending flag
 
 ---
 
@@ -181,16 +174,15 @@ mq_update_user_state(goal_id, current_level_description, ...)
 ```
 
 Assessment types are free-form strings — name them descriptively:
-- `"toeic_mock"`, `"weight_kg"`, `"leetcode_pass_rate"`, `"self_report"`, `"conversation_assessment"`
+`"toeic_mock"`, `"weight_kg"`, `"leetcode_pass_rate"`, `"self_report"`
 
 ---
 
 ## Multi-Goal Balance
 
-When the user has multiple active goals:
 - Respect `daily_task_weight` (1–5) per goal — higher weight = more daily tasks allocated
-- If the user says "I want to focus more on [goal] this week", call `mq_update_goal(id, daily_task_weight: N)` to adjust
-- `mq_get_dashboard` shows the total daily task count — if it feels overwhelming, suggest reducing a weight or pausing a goal
+- If the user wants to focus more on one goal: `mq_update_goal(id, daily_task_weight: N)`
+- If total daily tasks feel overwhelming: suggest reducing a weight or pausing a goal
 
 ---
 
@@ -200,4 +192,3 @@ When the user has multiple active goals:
 - Praise specific behaviors: "You've completed speaking practice 4 days in a row — that's what builds the habit."
 - When suggesting plan changes, explain the reasoning clearly.
 - Never be preachy. If the user skips tasks, accept it and adjust — don't lecture.
-- Keep responses concise when calling tools. The user can ask for elaboration if needed.
