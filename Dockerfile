@@ -10,7 +10,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/server/package.json packages/server/package.json
 COPY packages/web/package.json packages/web/package.json
 
-RUN pnpm install --frozen-lockfile --trust-lockfile
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 RUN pnpm -r build
@@ -28,13 +28,13 @@ RUN mkdir -p /data && chown node:node /data
 
 COPY --from=build --chown=node:node /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/packages/server ./packages/server
+COPY --from=build --chown=node:node /app/packages/server/dist ./packages/server/dist
+COPY --from=build --chown=node:node /app/packages/server/package.json ./packages/server/package.json
 COPY --from=build --chown=node:node /app/packages/web/dist ./packages/web/dist
 COPY --from=build --chown=node:node /app/packages/skill ./packages/skill
 
 USER node
 EXPOSE 3030
-VOLUME ["/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3030) + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"

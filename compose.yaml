@@ -7,15 +7,15 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      PORT: 3030
+      PORT: ${PORT:-3030}
       MOCHI_QUEST_DB: /data/data.db
       MOCHI_QUEST_WEB_DIST: /app/packages/web/dist
     volumes:
       - mochi_quest_data:/data
     ports:
-      - "127.0.0.1:3030:3030"
+      - "${HOST:-127.0.0.1}:${PORT:-3030}:${PORT:-3030}"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3030/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${PORT:-3030}/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3

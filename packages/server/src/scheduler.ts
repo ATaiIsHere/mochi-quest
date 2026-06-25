@@ -54,13 +54,18 @@ async function runDailyCheck(): Promise<void> {
   const pendingCount = todayTasks.filter(t => t.status === 'pending').length;
 
   if (pendingCount > 0) {
-    notifier.notify({
-      title: 'Mochi Quest',
-      message: `今天有 ${pendingCount} 個任務等你完成！`,
-      open: 'http://localhost:3030',
-      sound: false,
-    });
-    console.log(`[scheduler] Notified: ${pendingCount} pending tasks`);
+    try {
+      notifier.notify({
+        title: 'Mochi Quest',
+        message: `今天有 ${pendingCount} 個任務等你完成！`,
+        open: `http://localhost:${process.env.PORT ?? '3030'}`,
+        sound: false,
+      });
+      console.log(`[scheduler] Notified: ${pendingCount} pending tasks`);
+    } catch {
+      // No desktop environment (e.g. Docker) — notification skipped
+      console.log(`[scheduler] ${pendingCount} pending tasks (notification unavailable)`);
+    }
   } else {
     console.log('[scheduler] Daily check: all tasks done or no tasks today');
   }
