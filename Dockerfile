@@ -31,7 +31,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/packages/server/dist ./packages/server/dist
 COPY --from=build --chown=node:node /app/packages/server/package.json ./packages/server/package.json
 COPY --from=build --chown=node:node /app/packages/web/dist ./packages/web/dist
-COPY --from=build --chown=node:node /app/packages/skill ./packages/skill
+COPY --from=build --chown=node:node /app/skills ./skills
 
 USER node
 EXPOSE 3030

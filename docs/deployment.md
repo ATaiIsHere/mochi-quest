@@ -3,7 +3,7 @@
 Mochi Quest is split into two deployable concerns:
 
 - **Server**: REST API, Web UI, scheduler, SQLite storage, and MCP entrypoint.
-- **Skill**: `packages/mochi-quest/SKILL.md` — agent behavior instructions; install into your agent separately.
+- **Skill**: `skills/mochi-quest/SKILL.md` — agent behavior instructions; install into your agent separately.
 
 ## Server
 
@@ -135,7 +135,7 @@ Any agent that supports MCP stdio servers can connect using the same pattern: ru
 
 ### Step 2 — Install the skill
 
-Install `packages/mochi-quest/SKILL.md` into your agent's skill system.
+Install `skills/mochi-quest/SKILL.md` into your agent's skill system.
 
 #### Claude Code
 
@@ -153,7 +153,7 @@ Then invoke with `/mochi-quest` or let Claude activate it automatically when rel
 
 #### Other agents
 
-Check your agent's documentation for where to place skill directories. Most agents that support the [Agent Skills](https://agentskills.io) standard look for skills in a configured directory. The `packages/mochi-quest/` folder is a valid Agent Skills directory.
+Check your agent's documentation for where to place skill directories. Most agents that support the [Agent Skills](https://agentskills.io) standard look for skills in a configured directory. The `skills/mochi-quest/` folder is a valid Agent Skills directory.
 
 If your agent doesn't support Agent Skills yet, paste the contents of `SKILL.md` (after the frontmatter) into the agent's system prompt or project instructions.
 

@@ -114,7 +114,7 @@ Add the MCP server to your agent's config:
 }
 ```
 
-Then install `packages/mochi-quest/` as a skill (or paste the SKILL.md body into your system prompt).
+Then install `skills/mochi-quest/` as a skill (or paste the SKILL.md body into your system prompt).
 
 ---
 
