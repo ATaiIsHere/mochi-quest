@@ -4,13 +4,13 @@ FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/server/package.json packages/server/package.json
 COPY packages/web/package.json packages/web/package.json
 
-RUN pnpm install --frozen-lockfile --trust-lockfile
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 RUN pnpm -r build
