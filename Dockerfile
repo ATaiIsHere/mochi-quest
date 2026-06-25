@@ -10,7 +10,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/server/package.json packages/server/package.json
 COPY packages/web/package.json packages/web/package.json
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --trust-lockfile
 
 COPY . .
 RUN pnpm -r build
@@ -30,6 +30,7 @@ COPY --from=build --chown=node:node /app/package.json /app/pnpm-lock.yaml /app/p
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/packages/server/dist ./packages/server/dist
 COPY --from=build --chown=node:node /app/packages/server/package.json ./packages/server/package.json
+COPY --from=build --chown=node:node /app/packages/server/node_modules ./packages/server/node_modules
 COPY --from=build --chown=node:node /app/packages/web/dist ./packages/web/dist
 COPY --from=build --chown=node:node /app/skills ./skills
 
