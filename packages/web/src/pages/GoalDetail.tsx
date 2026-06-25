@@ -129,7 +129,7 @@ export function GoalDetailPage() {
                   <div key={a.id} className="text-xs">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{a.assessment_type}</span>
-                      <span className="text-muted-foreground">{formatDate(a.created_at)}</span>
+                      <span className="text-muted-foreground">{formatDate(a.created_at ?? a.timestamp ?? '')}</span>
                     </div>
                     <pre className="text-muted-foreground mt-0.5 whitespace-pre-wrap font-sans">
                       {JSON.stringify(a.result, null, 2)}

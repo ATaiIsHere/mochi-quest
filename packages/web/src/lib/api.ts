@@ -200,5 +200,6 @@ export interface Assessment {
   result: Record<string, unknown>;
   source: string;
   notes?: string;
-  created_at: string;
+  created_at?: string;
+  timestamp?: string;
 }
