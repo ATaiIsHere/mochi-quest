@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <circle cx="16" cy="16" r="14" fill="#f9a8d4"/>
+  <ellipse cx="16" cy="19" rx="9" ry="6" fill="#fce7f3"/>
+  <text x="16" y="15" font-size="13" text-anchor="middle" dominant-baseline="middle">🍡</text>
+</svg>

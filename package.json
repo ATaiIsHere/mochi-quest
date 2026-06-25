@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "AI-powered personal growth coaching system",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --filter @mochi-quest/server dev",
