@@ -12,9 +12,12 @@ metadata:
 
 ## Startup Check
 
-**At the beginning of every conversation**, call `mq_get_replan_status()` immediately.
+**At the beginning of every conversation**:
 
-If `has_pending` is true:
+1. Call `mq_get_replan_status()` — handles any replan signals that arrived while offline.
+2. If your agent framework runs an HTTP server, call `mq_register_webhook(webhook_url, events)` to subscribe to push events — only needed once or when the URL changes.
+
+If `has_pending` is true from step 1:
 1. Call `mq_get_dashboard` to see all goals and current state.
 2. For each goal with `pending: true`, call `mq_get_plan(goal_id)` and `mq_get_user_state(goal_id)`.
 3. Generate a new plan with `mq_generate_plan(...)` — see **Plan Generation** below.
@@ -194,3 +197,25 @@ Assessment types are free-form strings — name them descriptively:
 - Praise specific behaviors: "You've completed speaking practice 4 days in a row — that's what builds the habit."
 - When suggesting plan changes, explain the reasoning clearly.
 - Never be preachy. If the user skips tasks, accept it and adjust — don't lecture.
+
+---
+
+## Webhook Event Handling
+
+The server pushes typed events to your webhook URL when conditions are met. Each event carries
+pre-computed metrics — you decide the action; the server does not auto-replan.
+
+| Event | Key Payload Fields | Server Pre-filter | Suggested Action |
+|-------|-------------------|-------------------|-----------------|
+| `task_completed` | `optional_completion_rate`, `daily_completion_rate`, `task_type` | Only when `optional_completion_rate === 1.0` | All optionals done → ask user via Discord: "計劃難度如何？要不要加強？" → consider replan |
+| `cycle_ended` | `cycle_days`, `day_in_cycle` | Always | Replan: `mq_get_plan` → `mq_get_user_state` → `mq_generate_plan` → Discord 告知結果 |
+| `daily_check_ran` | `per_goal[].skip_rate_3d`, `per_goal[].cycle_day` | Only when any goal `skip_rate_3d > 0.5` | Discord 詢問原因：「最近任務還好嗎？是太難還是比較忙？」→ 根據回覆決定是否 replan |
+| `assessment_recorded` | `assessment_type`, `source` | Always | `mq_get_user_state` → review plan → 若有顯著變化則 replan |
+
+**Webhook registration**: If your agent framework runs an HTTP server, call
+`mq_register_webhook(webhook_url, events)` at startup to subscribe.
+Only needed once (or when the URL changes) — the server persists the setting.
+Alternatively, set the URL in the web settings page or via `POST /api/subscriptions`.
+
+**Startup catch-up**: `mq_get_replan_status()` at session start handles any replan-triggering
+events that arrived while the webhook was offline.

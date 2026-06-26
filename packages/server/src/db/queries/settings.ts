@@ -7,6 +7,8 @@ export interface UserSettings {
   timezone: string;
   llm_provider: Record<string, unknown> | null;
   log_retention_days: number;
+  agent_webhook_url: string;
+  agent_webhook_events: string;
 }
 
 export function getSettings(): UserSettings {
@@ -19,6 +21,8 @@ export function getSettings(): UserSettings {
     timezone: row.timezone as string,
     llm_provider: row.llm_provider ? JSON.parse(row.llm_provider as string) : null,
     log_retention_days: row.log_retention_days as number,
+    agent_webhook_url: (row.agent_webhook_url as string) || '',
+    agent_webhook_events: (row.agent_webhook_events as string) || 'task_completed,cycle_ended,daily_check_ran,assessment_recorded',
   };
 }
 
@@ -50,6 +54,14 @@ export function updateSettings(updates: Partial<UserSettings>): UserSettings {
   if (updates.log_retention_days !== undefined) {
     fields.push('log_retention_days = ?');
     values.push(Math.max(1, Math.min(30, updates.log_retention_days)));
+  }
+  if (updates.agent_webhook_url !== undefined) {
+    fields.push('agent_webhook_url = ?');
+    values.push(updates.agent_webhook_url);
+  }
+  if (updates.agent_webhook_events !== undefined) {
+    fields.push('agent_webhook_events = ?');
+    values.push(updates.agent_webhook_events);
   }
 
   if (fields.length > 0) {

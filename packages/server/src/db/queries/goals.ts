@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../schema.js';
-import { writeLog } from './logs.js';
+import { emitEvent } from '../../events.js';
 
 export interface Goal {
   id: string;
@@ -63,7 +63,7 @@ export function createGoal(input: CreateGoalInput): Goal {
     JSON.stringify(input.lifestyle_context ?? {}),
     input.daily_task_weight ?? 3,
   );
-  writeLog({ event_type: 'goal_created', entity_type: 'goal', entity_id: id, goal_id: id, title: `新增目標：${input.title}` });
+  emitEvent('goal_created', { entity_type: 'goal', entity_id: id, goal_id: id, title: `新增目標：${input.title}` });
   return getGoal(id)!;
 }
 
@@ -80,7 +80,7 @@ export function updateGoal(id: string, updates: Partial<Omit<Goal, 'id' | 'creat
 
   db.prepare(`UPDATE goals SET ${setClauses}, updated_at = datetime('now') WHERE id = ?`).run(...values, id);
   const updated = getGoal(id);
-  if (updated) writeLog({ event_type: 'goal_updated', entity_type: 'goal', entity_id: id, goal_id: id, title: `更新目標：${updated.title}` });
+  if (updated) emitEvent('goal_updated', { entity_type: 'goal', entity_id: id, goal_id: id, title: `更新目標：${updated.title}` });
   return updated;
 }
 
@@ -89,6 +89,6 @@ export function setGoalStatus(id: string, status: 'active' | 'paused' | 'complet
   // updateGoal writes goal_updated; overwrite with a more specific event
   const db = getDb();
   db.prepare(`UPDATE goals SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
-  if (goal) writeLog({ event_type: 'goal_status_changed', entity_type: 'goal', entity_id: id, goal_id: id, title: `目標狀態變更：${goal.title}`, reason: status });
+  if (goal) emitEvent('goal_status_changed', { entity_type: 'goal', entity_id: id, goal_id: id, title: `目標狀態變更：${goal.title}`, reason: status });
   return getGoal(id);
 }

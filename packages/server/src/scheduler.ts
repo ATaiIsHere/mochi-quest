@@ -1,11 +1,11 @@
 import cron from 'node-cron';
-import { getTodayTasks } from './db/queries/tasks.js';
+import { getTodayTasks, getSkipRateLast3Days } from './db/queries/tasks.js';
 import { updateStreakOnSkip } from './db/queries/streaks.js';
 import { listGoals } from './db/queries/goals.js';
 import { getActivePlan, isCycleComplete } from './db/queries/plans.js';
 import { getSettings } from './db/queries/settings.js';
 import { checkAndTriggerReplan, triggerReplan } from './db/queries/replan.js';
-import { writeLog } from './db/queries/logs.js';
+import { emitEvent } from './events.js';
 import { getDb } from './db/schema.js';
 
 let scheduledTask: cron.ScheduledTask | null = null;
@@ -63,11 +63,27 @@ export async function runSystemCheck(): Promise<void> {
   // Allocate today's tasks (no-op if already allocated)
   getTodayTasks();
 
-  writeLog({
-    event_type: 'daily_check_run',
+  // Build per-goal metrics for event payload
+  const perGoal = goalsChecked.map(goalId => {
+    const plan = getActivePlan(goalId);
+    const skip_rate_3d = getSkipRateLast3Days(goalId);
+    let cycle_day = 0;
+    let cycle_days = 0;
+    if (plan?.cycle_start_date) {
+      const cycleStart = new Date(plan.cycle_start_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      cycleStart.setHours(0, 0, 0, 0);
+      cycle_day = Math.floor((today.getTime() - cycleStart.getTime()) / 86400000) + 1;
+      cycle_days = plan.cycle_days;
+    }
+    return { goal_id: goalId, skip_rate_3d, cycle_day, cycle_days };
+  });
+
+  emitEvent('daily_check_ran', {
     title: '每日排程執行',
     reason: `goals: ${goalsChecked.length}`,
-    metadata: { goals_checked: goalsChecked.length },
+    metadata: { goals_checked: goalsChecked.length, per_goal: perGoal },
   });
 
   console.log(`[scheduler] Daily check complete. ${activeGoals.length} goals checked.`);

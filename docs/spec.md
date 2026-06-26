@@ -391,6 +391,7 @@ All tools are prefixed with `mq_` to avoid naming conflicts.
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `mq_send_notification` | `message: string` | Send message to configured Discord channel (no-op if not configured) |
+| `mq_register_webhook` | `webhook_url: string, events: string[]` | Register agent webhook URL for push events. Persisted in settings. |
 
 ### Dashboard
 
@@ -440,9 +441,93 @@ PATCH  /api/settings
 GET    /api/logs?limit=100   # activity log (max 200 entries, most recent first)
 
 POST   /api/notify           # send message to configured Discord webhook { message: string }
+POST   /api/subscriptions   # register agent webhook { webhook_url, events?: string[] }
 
 GET    /api/events   # SSE endpoint for real-time UI updates
 ```
+
+---
+
+## Event System
+
+### Overview
+
+All meaningful state changes emit a typed event through a unified pipeline:
+
+```
+emitEvent(type, data)
+  ├── writeLog()            → DB activity_logs (permanent audit trail)
+  ├── emitSseEvent()        → Web UI badge (real-time, in-memory)
+  └── notifyAgentWebhook()  → Agent HTTP endpoint (filtered, push)
+```
+
+Log and SSE always fire. Agent webhook applies subscription and condition filters.
+
+### Event Types
+
+| Event | Emitted By | Payload Key Fields | Default Webhook |
+|-------|-----------|-------------------|-----------------|
+| `goal_created` | `createGoal()` | `goal_id` | no |
+| `goal_updated` | `updateGoal()` | `goal_id` | no |
+| `goal_status_changed` | `setGoalStatus()` | `goal_id`, `reason` (status) | no |
+| `plan_created` | `createPlan()` | `goal_id`, `cycle_days` | no |
+| `task_completed` | `completeTask()` | `task_type`, `optional_completion_rate`, `daily_completion_rate`, `coin_reward` | ✓ when `optional_completion_rate === 1.0` |
+| `task_skipped` | `skipTask()` | `task_id`, `task_type`, `reason` | no |
+| `cycle_ended` | `allocateDailyTasks()` | `cycle_days`, `day_in_cycle` | ✓ always |
+| `daily_check_ran` | `runSystemCheck()` | `per_goal[].skip_rate_3d`, `per_goal[].cycle_day` | ✓ when any goal `skip_rate_3d > 0.5` |
+| `assessment_recorded` | `addAssessment()` | `assessment_type`, `source` | ✓ always |
+| `replan_triggered` | `triggerReplan()` | `reason`, `replan_pending: true` | no (SSE only) |
+
+### Server-side Condition Pre-filter
+
+The `WEBHOOK_CONDITIONS` map in `api/notify.ts` gates event delivery before POSTing.
+This saves agent tokens by only forwarding actionable signals:
+
+```typescript
+task_completed:  only when optional_completion_rate === 1.0
+daily_check_ran: only when any per_goal[].skip_rate_3d > 0.5
+```
+
+Events with no condition entry are always forwarded (if subscribed).
+
+### Subscription Setup
+
+**Via MCP tool (preferred for agent startup)**:
+```
+mq_register_webhook(webhook_url: "http://localhost:8080/webhook", events: ["task_completed", "cycle_ended", "daily_check_ran", "assessment_recorded"])
+```
+
+**Via REST API**:
+```
+POST /api/subscriptions
+{ "webhook_url": "http://localhost:8080/webhook", "events": ["task_completed", "cycle_ended"] }
+```
+
+**Via settings page**: "Agent Webhook" card — URL and comma-separated event list.
+
+Empty `events` list = all events forwarded (subject to conditions).
+
+### Webhook Payload Format
+
+```json
+{
+  "event": "task_completed",
+  "goal_id": "abc",
+  "timestamp": "2026-06-26T10:30:00Z",
+  "metadata": {
+    "task_id": "xyz",
+    "task_type": "optional",
+    "coin_reward": 15,
+    "optional_completion_rate": 1.0,
+    "daily_completion_rate": 0.67
+  }
+}
+```
+
+### Offline Catch-up
+
+`replan_pending` DB flag is retained. At session start, `mq_get_replan_status()` returns any pending
+replans that triggered while the agent webhook was offline.
 
 ---
 

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../schema.js';
-import { triggerReplan } from './replan.js';
+import { emitEvent } from '../../events.js';
 
 export interface Assessment {
   id: string;
@@ -59,8 +59,14 @@ export function addAssessment(input: {
     ON CONFLICT(goal_id) DO UPDATE SET last_assessment_date = date('now'), updated_at = datetime('now')
   `).run(input.goal_id);
 
-  // Trigger replan check
-  triggerReplan(input.goal_id, 'assessment_change');
+  // Emit event — agent decides whether to replan after reviewing the assessment
+  emitEvent('assessment_recorded', {
+    goal_id: input.goal_id,
+    entity_type: 'assessment',
+    entity_id: id,
+    title: `新增評估：${input.assessment_type}`,
+    metadata: { assessment_type: input.assessment_type, source: input.source },
+  });
 
   return parseAssessment(db.prepare('SELECT * FROM assessments WHERE id = ?').get(id) as Record<string, unknown>);
 }

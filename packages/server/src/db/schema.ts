@@ -35,6 +35,7 @@ function runMigrations(db: Database.Database): void {
     { version: 1, sql: MIGRATION_1 },
     { version: 2, sql: MIGRATION_2 },
     { version: 3, sql: MIGRATION_3 },
+    { version: 4, sql: MIGRATION_4 },
   ];
 
   for (const m of migrations) {
@@ -210,4 +211,9 @@ const MIGRATION_3 = `
 
   ALTER TABLE user_settings ADD COLUMN daily_check_time TEXT NOT NULL DEFAULT '04:00';
   ALTER TABLE user_settings ADD COLUMN discord_webhook_url TEXT NOT NULL DEFAULT '';
+`;
+
+const MIGRATION_4 = `
+  ALTER TABLE user_settings ADD COLUMN agent_webhook_url TEXT NOT NULL DEFAULT '';
+  ALTER TABLE user_settings ADD COLUMN agent_webhook_events TEXT NOT NULL DEFAULT 'task_completed,cycle_ended,daily_check_ran,assessment_recorded';
 `;

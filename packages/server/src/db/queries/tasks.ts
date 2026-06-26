@@ -6,6 +6,7 @@ import { addCoins } from './wallet.js';
 import { updateStreakOnComplete, updateStreakOnSkip } from './streaks.js';
 import { checkAndTriggerReplan, triggerReplan } from '../queries/replan.js';
 import { writeLog } from './logs.js';
+import { emitEvent } from '../../events.js';
 
 export interface Task {
   id: string;
@@ -75,7 +76,14 @@ function allocateDailyTasks(date: string): Task[] {
 
       if (dayInCycle > plan.cycle_days) {
         // Cycle ended — signal for replan; no tasks allocated until replanned
-        if (!plan.replan_pending) triggerReplan(goal.id, 'cycle_complete');
+        if (!plan.replan_pending) {
+          triggerReplan(goal.id, 'cycle_complete');
+          emitEvent('cycle_ended', {
+            goal_id: goal.id,
+            title: '週期結束',
+            metadata: { cycle_days: plan.cycle_days, day_in_cycle: dayInCycle },
+          });
+        }
         continue;
       }
 
@@ -199,14 +207,31 @@ export function completeTask(id: string, notes?: string): Task | null {
     updateStreakOnComplete(task.goal_id);
   }
 
-  // Check if replan needed
-  if (task.task_type === 'optional') {
-    checkAndTriggerReplan(task.goal_id, 'high_optional_completion');
-  } else {
+  // Check if replan needed (for daily tasks only; optional completion now handled via webhook)
+  if (task.task_type !== 'optional') {
     checkAndTriggerReplan(task.goal_id, 'task_completed');
   }
 
-  writeLog({ event_type: 'task_completed', entity_type: 'task', entity_id: id, goal_id: task.goal_id, title: `完成任務：${task.title}`, metadata: { coin_reward: task.coin_reward } });
+  // Compute completion rates for event payload
+  const optionalStats = db.prepare(
+    "SELECT COUNT(*) as total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed FROM tasks WHERE plan_id = ? AND task_type = 'optional'"
+  ).get(task.plan_id) as { total: number; completed: number };
+  const optional_completion_rate = optionalStats.total > 0 ? optionalStats.completed / optionalStats.total : 0;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyStats = db.prepare(
+    "SELECT COUNT(*) as total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed FROM tasks WHERE goal_id = ? AND task_type = 'daily' AND due_date = ?"
+  ).get(task.goal_id, today) as { total: number; completed: number };
+  const daily_completion_rate = dailyStats.total > 0 ? dailyStats.completed / dailyStats.total : 0;
+
+  emitEvent('task_completed', {
+    entity_type: 'task',
+    entity_id: id,
+    goal_id: task.goal_id,
+    title: `完成任務：${task.title}`,
+    metadata: { task_id: id, task_type: task.task_type, coin_reward: task.coin_reward, optional_completion_rate, daily_completion_rate },
+  });
+
   return getTask(id);
 }
 
@@ -222,7 +247,15 @@ export function skipTask(id: string, reason: string): Task | null {
     checkAndTriggerReplan(task.goal_id, 'task_skipped');
   }
 
-  writeLog({ event_type: 'task_skipped', entity_type: 'task', entity_id: id, goal_id: task.goal_id, title: `略過任務：${task.title}`, reason });
+  emitEvent('task_skipped', {
+    entity_type: 'task',
+    entity_id: id,
+    goal_id: task.goal_id,
+    title: `略過任務：${task.title}`,
+    reason,
+    metadata: { task_id: id, task_type: task.task_type },
+  });
+
   return getTask(id);
 }
 

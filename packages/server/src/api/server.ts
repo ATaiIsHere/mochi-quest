@@ -4,6 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { subscribeToSse } from '../db/queries/replan.js';
+import { sendDiscordNotification } from './notify.js';
 import { listGoals, getGoal, createGoal, updateGoal, setGoalStatus } from '../db/queries/goals.js';
 import { getActivePlan, getPlanHistory, getReplanPending } from '../db/queries/plans.js';
 import { getTodayTasks, getOptionalTasks, completeTask, skipTask } from '../db/queries/tasks.js';
@@ -204,27 +205,21 @@ app.post('/api/notify', async (c) => {
   const { message } = await c.req.json() as { message?: string };
   if (!message) return c.json({ error: 'message required' }, 400);
 
-  const { discord_webhook_url } = getSettings();
-  if (!discord_webhook_url) {
-    console.warn('[notify] No discord_webhook_url configured — notification skipped');
-    return new Response(null, { status: 204 });
-  }
-
   try {
-    const res = await fetch(discord_webhook_url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: message }),
-    });
-    if (!res.ok) {
-      console.error(`[notify] Discord webhook returned ${res.status}`);
-      return c.json({ error: `Discord returned ${res.status}` }, 502);
-    }
+    await sendDiscordNotification(message);
     return c.json({ sent: true });
   } catch (err) {
     console.error('[notify] Failed to send Discord notification:', err);
     return c.json({ error: 'Failed to send notification' }, 502);
   }
+});
+
+// Agent webhook subscription
+app.post('/api/subscriptions', async (c) => {
+  const { webhook_url, events } = await c.req.json() as { webhook_url: string; events?: string[] };
+  if (!webhook_url) return c.json({ error: 'webhook_url required' }, 400);
+  updateSettings({ agent_webhook_url: webhook_url, agent_webhook_events: (events ?? []).join(',') });
+  return c.json({ ok: true });
 });
 
 // Dashboard

@@ -83,6 +83,32 @@ export function SettingsPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-sm">Agent Webhook</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <SettingRow label="Webhook URL" hint="Agent 接收事件推送的端點，留空則停用。透過 mq_register_webhook 也可設定">
+              <input
+                type="url"
+                value={form.agent_webhook_url ?? ''}
+                placeholder="http://localhost:8080/webhook"
+                onChange={e => setForm(f => ({ ...f, agent_webhook_url: e.target.value }))}
+                className="w-64 rounded-md border bg-background px-2 py-1 text-sm"
+              />
+            </SettingRow>
+            <SettingRow label="訂閱的 Events" hint="逗號分隔，留空則推送所有訂閱事件（預設：task_completed,cycle_ended,daily_check_ran,assessment_recorded）">
+              <input
+                type="text"
+                value={form.agent_webhook_events ?? ''}
+                placeholder="task_completed,cycle_ended,daily_check_ran,assessment_recorded"
+                onChange={e => setForm(f => ({ ...f, agent_webhook_events: e.target.value }))}
+                className="w-64 rounded-md border bg-background px-2 py-1 text-sm"
+              />
+            </SettingRow>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-sm">日誌設定</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

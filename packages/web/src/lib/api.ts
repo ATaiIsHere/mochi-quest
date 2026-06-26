@@ -188,6 +188,8 @@ export interface Settings {
   discord_webhook_url: string;
   timezone: string;
   log_retention_days: number;
+  agent_webhook_url: string;
+  agent_webhook_events: string;
 }
 
 export interface ActivityLog {
