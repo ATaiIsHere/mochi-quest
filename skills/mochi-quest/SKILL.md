@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires the Mochi Quest MCP server to be running. See docs/deployment.md for setup instructions.
 metadata:
   author: mochi-quest
-  version: "0.1.0"
+  version: "0.3.0"
 ---
 
 # Mochi Quest — AI Coach
@@ -48,7 +48,7 @@ Once confirmed, call:
 ```
 mq_create_goal(title, category, definition, success_criteria, deadline, lifestyle_context, daily_task_weight)
 mq_update_user_state(goal_id, current_level_description, strengths, weaknesses)
-mq_generate_plan(goal_id, milestones, current_phase, task_template_pool, created_reason: 'initial')
+mq_generate_plan(goal_id, milestones, current_phase, cycle_days, daily_schedule, optional_pool, created_reason: 'initial')
 ```
 
 ---
@@ -63,24 +63,32 @@ When generating or regenerating a plan, reason freely from your knowledge about 
 - Space them realistically given the deadline and current state
 - First milestone: achievable in 2–4 weeks (early win builds momentum)
 
-### Task Template Pool
-Generate **7–14 days** of tasks (mix of daily and optional):
+### Cycle-based Schedule
 
-**Daily tasks** (task_type: "daily"):
-- Core habit-building activities
-- Difficulty 5–7 out of 10 (challenging but achievable)
-- Estimated duration: realistic for the user's stated availability
-- Varied across days — no same type two days in a row (use tags to track)
-- Coin reward formula: roughly `difficulty × duration_factor`
-  - 15 min easy → 5 coins, 30 min medium → 15 coins, 60 min hard → 30 coins
+Choose `cycle_days` first (7–14 days recommended). Shorter is safer — it's better to replan frequently with real data than commit to a long cycle that's not working.
 
-**Optional tasks** (task_type: "optional"):
-- Stretch activities for motivated days
-- Higher difficulty (7–9) or longer duration
+**`daily_schedule`** — a day-by-day task menu for the cycle:
+```json
+[
+  { "day": 1, "tasks": [{ "title": "量體重", ... }, { "title": "間歇跑 30 分", ... }] },
+  { "day": 2, "tasks": [{ "title": "量體重", ... }, { "title": "核心訓練", ... }] },
+  ...
+]
+```
+- Same habit tasks (e.g. "量體重") can and should appear on multiple days
+- Each day: 1–3 focused tasks. Don't overfill.
+- Days without an entry get no tasks — use this intentionally for rest days
+- All tasks in `daily_schedule` have `task_type: "daily"` implicitly
+- Difficulty 5–7/10 (challenging but achievable)
+- Coin reward: ~5 coins per 15 min of effort (15 min → 5, 30 min → 15, 60 min → 30)
+
+**`optional_pool`** — tasks available throughout the entire cycle (created once at cycle start):
+- Stretch activities for motivated days — higher difficulty (7–9) or longer duration
 - "Nice to have" — no streak consequence for skipping
 - Coin reward: 1.5–2x equivalent daily task
+- When the user completes all optional tasks, this signals the plan is too easy → `high_optional_completion` replan
 
-**Diversity rule**: Use `tags` to mark task types (e.g. `["reading"]`, `["speaking"]`, `["writing"]`). Consecutive daily tasks should have different tags.
+**Diversity rule**: Use `tags` to mark task types (`["reading"]`, `["speaking"]`, `["strength"]`). Vary tags day-to-day to avoid monotony.
 
 ---
 
@@ -109,14 +117,6 @@ mq_generate_plan(...)  # immediately generate the updated plan
 ```
 
 ---
-
-## Replenishing Optional Tasks
-
-After `mq_complete_task` on an optional task, check how many optional tasks remain using `mq_get_optional_tasks(goal_id)`. If fewer than 3 remain:
-
-1. Look at the current plan (`mq_get_plan`) and user state (`mq_get_user_state`).
-2. Generate 2–3 new optional tasks using `mq_create_task(...)` with `task_type: "optional"`.
-3. Ensure they differ in type from recently completed tasks.
 
 ---
 
@@ -150,17 +150,19 @@ Optional tasks: multiply by 1.5
 
 ## Replan Triggers
 
-| Signal | Action |
-|--------|--------|
-| User says "too hard", "too busy", "too easy", "too much" | `mq_adjust_plan(reason: 'user_request')` then `mq_generate_plan` |
-| Server flags `replan_pending` (see Startup Check) | Generate plan immediately |
-| New assessment shows significant change | `mq_adjust_plan(reason: 'assessment_change')` |
-| Optional completion rate very high | `mq_adjust_plan(reason: 'low_challenge')` |
+| Signal | Reason | Action |
+|--------|--------|--------|
+| User says "too hard", "too busy", "too easy", "too much" | `user_request` | `mq_adjust_plan` then `mq_generate_plan` |
+| Server flags `replan_pending` (see Startup Check) | any | Generate plan immediately |
+| New assessment shows significant change | `assessment_change` | `mq_adjust_plan` then `mq_generate_plan` |
+| Cycle days elapsed | `cycle_complete` | Server triggers automatically; check at startup |
+| Daily completion rate consistently low | `low_completion` | Server triggers at 4am check; tasks too hard or wrong timing |
+| All optional tasks completed before cycle ends | `high_optional_completion` | Plan is too easy — increase difficulty or add more optionals |
 
 When generating a replan, always:
 1. Read current state: `mq_get_plan`, `mq_get_user_state`, `mq_get_task_history`
 2. Acknowledge the reason for replanning
-3. Adjust difficulty and/or task variety accordingly
+3. Adjust difficulty, `cycle_days`, and/or task variety accordingly
 4. Call `mq_generate_plan(...)` — this automatically clears the pending flag
 
 ---

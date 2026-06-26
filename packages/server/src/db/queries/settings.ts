@@ -2,7 +2,8 @@ import { getDb } from '../schema.js';
 
 export interface UserSettings {
   daily_task_total_limit: number;
-  notification_time: string;
+  daily_check_time: string;
+  discord_webhook_url: string;
   timezone: string;
   llm_provider: Record<string, unknown> | null;
   log_retention_days: number;
@@ -13,7 +14,8 @@ export function getSettings(): UserSettings {
   const row = db.prepare('SELECT * FROM user_settings WHERE id = 1').get() as Record<string, unknown>;
   return {
     daily_task_total_limit: row.daily_task_total_limit as number,
-    notification_time: row.notification_time as string,
+    daily_check_time: (row.daily_check_time as string) || '04:00',
+    discord_webhook_url: (row.discord_webhook_url as string) || '',
     timezone: row.timezone as string,
     llm_provider: row.llm_provider ? JSON.parse(row.llm_provider as string) : null,
     log_retention_days: row.log_retention_days as number,
@@ -29,9 +31,13 @@ export function updateSettings(updates: Partial<UserSettings>): UserSettings {
     fields.push('daily_task_total_limit = ?');
     values.push(updates.daily_task_total_limit);
   }
-  if (updates.notification_time !== undefined) {
-    fields.push('notification_time = ?');
-    values.push(updates.notification_time);
+  if (updates.daily_check_time !== undefined) {
+    fields.push('daily_check_time = ?');
+    values.push(updates.daily_check_time);
+  }
+  if (updates.discord_webhook_url !== undefined) {
+    fields.push('discord_webhook_url = ?');
+    values.push(updates.discord_webhook_url);
   }
   if (updates.timezone !== undefined) {
     fields.push('timezone = ?');

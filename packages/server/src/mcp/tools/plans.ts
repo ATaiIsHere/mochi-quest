@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { createPlan, getActivePlan, getPlanHistory, getReplanPending, setReplanPending } from '../../db/queries/plans.js';
-import { triggerReplan } from '../../db/queries/replan.js';
+import { createPlan, getActivePlan, getPlanHistory, getReplanPending, setReplanPending, type TaskTemplate } from '../../db/queries/plans.js';
+import { triggerReplan, type TriggerReason } from '../../db/queries/replan.js';
 import type { McpTool } from '../server.js';
 
 const MilestoneSchema = z.object({
@@ -38,26 +38,52 @@ export const planTools: McpTool[] = [
   },
   {
     name: 'mq_generate_plan',
-    description: `Store an AI-generated plan for a goal. The AI should call this after reasoning through the user's goal, current state, and creating a structured plan.
+    description: `Store an AI-generated cycle-based plan for a goal.
 
-The plan should include:
-- Milestones: major checkpoints with target dates and measurable success criteria
-- Task template pool: 7-14 days of pre-planned tasks (mix of daily and optional)
-- Tasks should have appropriate difficulty (5-7/10 for daily tasks)
-- Coin rewards: difficulty × duration factor (roughly: easy 15min→5, medium 30min→15, hard 60min→30)
-- Varied tags to prevent repetitive task sequences`,
+The plan uses a cycle model:
+- AI decides \`cycle_days\` (recommended 7–14 days, avoid too long in case the plan isn't working)
+- \`daily_schedule\`: an array of day entries, each with a list of tasks for that day
+  - Same habit tasks (e.g. "weigh yourself") can appear in multiple days
+  - Each day should have 1-3 focused tasks
+  - No need to fill all cycle_days — days without an entry get no tasks
+- \`optional_pool\`: tasks available throughout the cycle (created once, user picks any)
+  - Used to detect "too easy" (all optional done = early replan)
+- Milestones: major checkpoints with target dates
+- Difficulty 5-7/10 for daily tasks; coin rewards: ~5 per 15min of effort
+- Clear \`created_reason\` to explain why this plan was created`,
     inputSchema: z.object({
       goal_id: z.string(),
       milestones: z.array(MilestoneSchema),
       current_phase: z.string().describe('Current phase name, e.g. "Foundation", "Intermediate"'),
-      task_template_pool: z.array(TaskTemplateSchema).describe('Pre-planned tasks for upcoming days (7-14 recommended)'),
-      created_reason: z.enum(['initial', 'high_skip_rate', 'low_challenge', 'task_pool_depleted', 'user_request', 'assessment_change']).default('initial'),
+      cycle_days: z.number().int().min(1).max(30).default(7).describe('Length of this plan cycle in days'),
+      daily_schedule: z.array(z.object({
+        day: z.number().int().min(1).describe('Day number within the cycle (1-indexed)'),
+        tasks: z.array(TaskTemplateSchema.omit({ task_type: true })).describe('Tasks for this day'),
+      })).describe('Day-by-day task schedule for the cycle'),
+      optional_pool: z.array(TaskTemplateSchema.omit({ task_type: true })).default([]).describe('Optional tasks available throughout the entire cycle'),
+      created_reason: z.enum([
+        'initial', 'high_skip_rate', 'low_challenge', 'task_pool_depleted',
+        'user_request', 'assessment_change', 'cycle_complete', 'low_completion', 'high_optional_completion',
+      ] as const).default('initial'),
     }),
     handler: async (input) => {
-      const plan = createPlan(input);
+      const plan = createPlan({
+        goal_id: input.goal_id,
+        milestones: input.milestones,
+        current_phase: input.current_phase,
+        cycle_days: input.cycle_days,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        daily_schedule: (input.daily_schedule as any[]).map((d: any) => ({
+          day: d.day as number,
+          tasks: (d.tasks as any[]).map((t: any) => ({ ...t, task_type: 'daily' as const }) as TaskTemplate),
+        })),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        optional_template_pool: (input.optional_pool as any[]).map((t: any) => ({ ...t, task_type: 'optional' as const }) as TaskTemplate),
+        created_reason: input.created_reason,
+      });
       // Clear replan_pending after generating new plan
       setReplanPending(input.goal_id, false);
-      return { plan, message: 'Plan created successfully. Tasks will be allocated to today automatically.' };
+      return { plan, message: `Cycle-based plan created (${input.cycle_days} days). Today's tasks will be allocated automatically on first request.` };
     },
   },
   {
@@ -65,10 +91,13 @@ The plan should include:
     description: 'Signal that the current plan needs adjustment. This marks the plan as pending replan. The AI should then call mq_generate_plan with an updated plan.',
     inputSchema: z.object({
       goal_id: z.string(),
-      reason: z.enum(['high_skip_rate', 'low_challenge', 'task_pool_depleted', 'user_request', 'assessment_change']),
+      reason: z.enum([
+        'high_skip_rate', 'low_challenge', 'task_pool_depleted',
+        'user_request', 'assessment_change', 'cycle_complete', 'low_completion', 'high_optional_completion',
+      ] as const),
     }),
     handler: async ({ goal_id, reason }) => {
-      triggerReplan(goal_id, reason);
+      triggerReplan(goal_id, reason as TriggerReason);
       return { message: 'Replan triggered. Please call mq_generate_plan with the updated plan.' };
     },
   },

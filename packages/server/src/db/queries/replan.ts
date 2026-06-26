@@ -7,16 +7,28 @@ const SKIP_RATE_THRESHOLD = 0.5;
 const OPTIONAL_COMPLETION_THRESHOLD = 0.8;
 const POOL_DAYS_THRESHOLD = 3;
 
-type TriggerReason = 'high_skip_rate' | 'low_challenge' | 'task_pool_depleted' | 'user_request' | 'assessment_change' | 'task_completed' | 'task_skipped';
+export type TriggerReason =
+  | 'high_skip_rate'
+  | 'low_challenge'
+  | 'task_pool_depleted'
+  | 'user_request'
+  | 'assessment_change'
+  | 'task_completed'
+  | 'task_skipped'
+  | 'daily_check'
+  | 'cycle_complete'
+  | 'low_completion'
+  | 'high_optional_completion';
 
 export function checkAndTriggerReplan(goalId: string, event: TriggerReason): void {
   const plan = getActivePlan(goalId);
   if (!plan || plan.replan_pending) return;
 
+  const db = getDb();
   let shouldReplan = false;
   let reason: TriggerReason = event;
 
-  if (event === ('task_skipped' as TriggerReason)) {
+  if (event === 'task_skipped' || event === 'daily_check' || event === 'low_completion') {
     const skipRate = getSkipRateLast3Days(goalId);
     if (skipRate > SKIP_RATE_THRESHOLD) {
       shouldReplan = true;
@@ -24,19 +36,30 @@ export function checkAndTriggerReplan(goalId: string, event: TriggerReason): voi
     }
   }
 
-  if (event === 'task_completed') {
-    // Check optional completion rate
+  if (!shouldReplan && (event === 'task_completed' || event === 'daily_check')) {
     const optionalRate = getOptionalCompletionRateLast3Days(goalId);
     if (optionalRate > OPTIONAL_COMPLETION_THRESHOLD) {
       shouldReplan = true;
       reason = 'low_challenge';
     }
 
-    // Check task pool
-    const dailyPool = plan.task_template_pool.filter(t => t.task_type === 'daily');
-    if (dailyPool.length < POOL_DAYS_THRESHOLD) {
+    // Legacy pool check (for plans using task_template_pool)
+    if (!shouldReplan && plan.task_template_pool.length > 0 && plan.daily_schedule.length === 0) {
+      const dailyPool = plan.task_template_pool.filter(t => t.task_type === 'daily');
+      if (dailyPool.length < POOL_DAYS_THRESHOLD) {
+        shouldReplan = true;
+        reason = 'task_pool_depleted';
+      }
+    }
+  }
+
+  if (!shouldReplan && event === 'high_optional_completion') {
+    const remaining = (db.prepare(
+      "SELECT COUNT(*) as count FROM tasks WHERE goal_id = ? AND plan_id = ? AND task_type = 'optional' AND status = 'pending'"
+    ).get(goalId, plan.id) as { count: number }).count;
+    if (remaining === 0) {
       shouldReplan = true;
-      reason = 'task_pool_depleted';
+      reason = 'high_optional_completion';
     }
   }
 

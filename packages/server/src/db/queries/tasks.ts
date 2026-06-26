@@ -4,7 +4,7 @@ import { getActivePlan, updateTaskTemplatePool } from './plans.js';
 import { listGoals } from './goals.js';
 import { addCoins } from './wallet.js';
 import { updateStreakOnComplete, updateStreakOnSkip } from './streaks.js';
-import { checkAndTriggerReplan } from '../queries/replan.js';
+import { checkAndTriggerReplan, triggerReplan } from '../queries/replan.js';
 import { writeLog } from './logs.js';
 
 export interface Task {
@@ -56,36 +56,67 @@ export function getTodayTasks(): Task[] {
 
 function allocateDailyTasks(date: string): Task[] {
   const db = getDb();
-  const settings = db.prepare('SELECT * FROM user_settings WHERE id = 1').get() as { daily_task_total_limit: number };
-  const budget = settings?.daily_task_total_limit ?? 5;
-
   const activeGoals = listGoals('active');
   if (activeGoals.length === 0) return [];
 
-  const totalWeight = activeGoals.reduce((sum, g) => sum + g.daily_task_weight, 0);
   const allocated: Task[] = [];
 
   for (const goal of activeGoals) {
-    const allocation = Math.max(1, Math.round(budget * goal.daily_task_weight / totalWeight));
     const plan = getActivePlan(goal.id);
     if (!plan) continue;
 
-    const pool = plan.task_template_pool.filter(t => t.task_type === 'daily');
-    const selected = pool.slice(0, allocation);
+    if (plan.daily_schedule.length > 0 && plan.cycle_start_date) {
+      // Cycle-based scheduling
+      const cycleStart = new Date(plan.cycle_start_date);
+      const today = new Date(date);
+      cycleStart.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      const dayInCycle = Math.floor((today.getTime() - cycleStart.getTime()) / 86400000) + 1;
 
-    for (const template of selected) {
-      const task = createTask({
-        plan_id: plan.id,
-        goal_id: goal.id,
-        ...template,
-        due_date: date,
-      });
-      allocated.push(task);
+      if (dayInCycle > plan.cycle_days) {
+        // Cycle ended — signal for replan; no tasks allocated until replanned
+        if (!plan.replan_pending) triggerReplan(goal.id, 'cycle_complete');
+        continue;
+      }
+
+      const daySchedule = plan.daily_schedule.find(d => d.day === dayInCycle);
+      if (daySchedule) {
+        for (const template of daySchedule.tasks) {
+          const task = createTask({ plan_id: plan.id, goal_id: goal.id, ...template, task_type: 'daily', due_date: date });
+          allocated.push(task);
+        }
+      }
+
+      // Create optional tasks once for the whole cycle (idempotent)
+      if (plan.optional_template_pool.length > 0) {
+        const existingOptional = (db.prepare(
+          "SELECT COUNT(*) as count FROM tasks WHERE plan_id = ? AND task_type = 'optional'"
+        ).get(plan.id) as { count: number }).count;
+
+        if (existingOptional === 0) {
+          for (const template of plan.optional_template_pool) {
+            createTask({ plan_id: plan.id, goal_id: goal.id, ...template, task_type: 'optional' });
+          }
+        }
+      }
+    } else if (plan.task_template_pool.length > 0) {
+      // Legacy sequential pool (backward compatibility)
+      const settings = db.prepare('SELECT daily_task_total_limit FROM user_settings WHERE id = 1').get() as { daily_task_total_limit: number };
+      const budget = settings?.daily_task_total_limit ?? 5;
+      const totalWeight = activeGoals.reduce((sum, g) => sum + g.daily_task_weight, 0);
+      const allocation = Math.max(1, Math.round(budget * goal.daily_task_weight / totalWeight));
+
+      const pool = plan.task_template_pool.filter(t => t.task_type === 'daily');
+      const selected = pool.slice(0, allocation);
+
+      for (const template of selected) {
+        const task = createTask({ plan_id: plan.id, goal_id: goal.id, ...template, due_date: date });
+        allocated.push(task);
+      }
+
+      const remaining = plan.task_template_pool.filter(t => !selected.includes(t));
+      updateTaskTemplatePool(goal.id, remaining);
     }
-
-    // Remove used templates from pool
-    const remaining = plan.task_template_pool.filter(t => !selected.includes(t));
-    updateTaskTemplatePool(goal.id, remaining);
   }
 
   if (allocated.length > 0) {
@@ -169,7 +200,11 @@ export function completeTask(id: string, notes?: string): Task | null {
   }
 
   // Check if replan needed
-  checkAndTriggerReplan(task.goal_id, 'task_completed');
+  if (task.task_type === 'optional') {
+    checkAndTriggerReplan(task.goal_id, 'high_optional_completion');
+  } else {
+    checkAndTriggerReplan(task.goal_id, 'task_completed');
+  }
 
   writeLog({ event_type: 'task_completed', entity_type: 'task', entity_id: id, goal_id: task.goal_id, title: `完成任務：${task.title}`, metadata: { coin_reward: task.coin_reward } });
   return getTask(id);

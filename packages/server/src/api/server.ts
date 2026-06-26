@@ -199,6 +199,34 @@ app.get('/api/logs', (c) => {
   return c.json({ logs: getLogs(limit) });
 });
 
+// Notifications
+app.post('/api/notify', async (c) => {
+  const { message } = await c.req.json() as { message?: string };
+  if (!message) return c.json({ error: 'message required' }, 400);
+
+  const { discord_webhook_url } = getSettings();
+  if (!discord_webhook_url) {
+    console.warn('[notify] No discord_webhook_url configured — notification skipped');
+    return new Response(null, { status: 204 });
+  }
+
+  try {
+    const res = await fetch(discord_webhook_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message }),
+    });
+    if (!res.ok) {
+      console.error(`[notify] Discord webhook returned ${res.status}`);
+      return c.json({ error: `Discord returned ${res.status}` }, 502);
+    }
+    return c.json({ sent: true });
+  } catch (err) {
+    console.error('[notify] Failed to send Discord notification:', err);
+    return c.json({ error: 'Failed to send notification' }, 502);
+  }
+});
+
 // Dashboard
 app.get('/api/dashboard', (c) => {
   const goals = listGoals('active');

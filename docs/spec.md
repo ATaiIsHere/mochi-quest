@@ -1,6 +1,6 @@
 # Mochi Quest — System Specification
 
-> Version: 0.2.0  
+> Version: 0.3.0  
 > Status: Draft  
 > Last Updated: 2026-06-26
 
@@ -91,6 +91,8 @@ interface Goal {
 
 ### Plan
 
+Plans use a **cycle-based model**: AI decides a cycle length (recommended 7–14 days), assigns a specific menu for each day, and provides an optional pool for the whole cycle. When the cycle ends, replan is triggered.
+
 ```typescript
 interface Plan {
   id: string;                    // UUID
@@ -99,10 +101,19 @@ interface Plan {
   is_active: boolean;            // only one plan per goal is active
   milestones: Milestone[];
   current_phase: string;         // e.g. "Foundation", "Intermediate", "Advanced"
-  task_template_pool: TaskTemplate[];  // LLM-generated task templates for upcoming days
-  replan_pending: boolean;       // true while replan is in progress
-  created_reason: 'initial' | 'high_skip_rate' | 'low_challenge' | 'user_request' | 'assessment_change' | 'task_pool_depleted';
+  cycle_days: number;            // AI-chosen cycle length in days (default 7)
+  cycle_start_date: string;      // ISO date, set when plan is created
+  daily_schedule: DaySchedule[]; // day-by-day task menu for the cycle
+  optional_template_pool: TaskTemplate[];  // optional tasks for the whole cycle (created once)
+  task_template_pool: TaskTemplate[];  // legacy field (kept for backward compat)
+  replan_pending: boolean;       // true when replan has been flagged
+  created_reason: TriggerReason;
   created_at: string;
+}
+
+interface DaySchedule {
+  day: number;          // 1-indexed day within the cycle
+  tasks: TaskTemplate[]; // tasks for this day (task_type always 'daily')
 }
 
 interface Milestone {
@@ -124,8 +135,13 @@ interface TaskTemplate {
   coin_reward: number;
   completion_criteria: string;
   completion_method: 'manual' | 'auto';
-  tags: string[];                // for variety enforcement (no same tag consecutive days)
+  tags: string[];
 }
+
+type TriggerReason =
+  | 'initial' | 'user_request' | 'assessment_change'
+  | 'high_skip_rate' | 'low_challenge' | 'task_pool_depleted'
+  | 'cycle_complete' | 'low_completion' | 'high_optional_completion';
 ```
 
 ### Task
@@ -250,8 +266,9 @@ interface StreakMilestone {
 
 ```typescript
 interface UserSettings {
-  daily_task_total_limit: number;  // max tasks per day across all goals (default: 5)
-  notification_time: string;       // HH:MM format (default: "08:00")
+  daily_task_total_limit: number;  // max tasks per day across all goals (default: 5, legacy)
+  daily_check_time: string;        // HH:MM format, when system check runs (default: "04:00")
+  discord_webhook_url: string;     // Discord webhook for agent-driven notifications (empty = disabled)
   timezone: string;                // e.g. "Asia/Taipei"
   log_retention_days: number;      // auto-prune activity logs older than N days (default: 3)
   llm_provider?: {                 // for server-driven replan (Phase 4+)
@@ -274,7 +291,8 @@ interface ActivityLog {
   event_type:
     | 'goal_created' | 'goal_updated' | 'goal_status_changed'
     | 'task_completed' | 'task_skipped' | 'daily_allocated'
-    | 'plan_created' | 'replan_triggered';
+    | 'plan_created' | 'replan_triggered'
+    | 'daily_check_run' | 'cycle_complete';
   entity_type: 'goal' | 'task' | 'plan' | 'system';
   entity_id: string | null;
   goal_id: string | null;
@@ -297,6 +315,8 @@ interface ActivityLog {
 | `daily_allocated` | `allocateDailyTasks()` | metadata.date, metadata.count |
 | `plan_created` | `createPlan()` | reason = created_reason |
 | `replan_triggered` | `triggerReplan()` | reason = trigger cause |
+| `daily_check_run` | `runSystemCheck()` | metadata.goals_checked |
+| `cycle_complete` | `allocateDailyTasks()` → `triggerReplan()` | logged via replan_triggered |
 
 ---
 
@@ -366,6 +386,12 @@ All tools are prefixed with `mq_` to avoid naming conflicts.
 | `mq_get_settings` | — | Get global settings |
 | `mq_update_settings` | `...partial settings` | Update settings |
 
+### Notifications
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `mq_send_notification` | `message: string` | Send message to configured Discord channel (no-op if not configured) |
+
 ### Dashboard
 
 | Tool | Parameters | Description |
@@ -413,6 +439,8 @@ PATCH  /api/settings
 
 GET    /api/logs?limit=100   # activity log (max 200 entries, most recent first)
 
+POST   /api/notify           # send message to configured Discord webhook { message: string }
+
 GET    /api/events   # SSE endpoint for real-time UI updates
 ```
 
@@ -433,11 +461,11 @@ The AI coach has no rigid templates. It reasons from first principles for each u
 5. Store as goal + generate initial plan
 
 **Task Planning (Planning Layer — LLM)**
-- Generate task template pool covering 7-14 days ahead
-- Daily tasks: core tasks, difficulty 5-7/10, 1-3 per goal per day
-- Optional tasks: supplementary challenges for motivated days
-- No same tag consecutive days (variety enforcement)
-- Coin reward = f(difficulty, estimated_duration, task_type)
+- AI decides `cycle_days` (7–14 recommended) to avoid locking in a bad plan too long
+- `daily_schedule`: per-day task menu for the cycle; habit tasks can repeat across days
+- `optional_pool`: supplementary tasks for the whole cycle (created once; all done = early replan)
+- Difficulty 5-7/10 for daily tasks; coin reward = f(difficulty, duration)
+- Clear `created_reason` for every plan so the user can understand why it changed
 
 **Multi-Goal Daily Balancing (Execution Layer — rule engine)**
 ```
@@ -450,14 +478,15 @@ When user creates a reward conflicting with a goal:
 - Food reward when goal = weight loss → multiply cost by 1.5-3x with explanation
 - Neutral reward (book, movie) → no adjustment
 
-**Replan Triggers (event-driven)**
-| Event | Check | Trigger Condition |
-|-------|-------|------------------|
-| Task skipped | On each skip | 3-day skip rate > 50% |
-| Optional completed | On each completion | 3-day optional rate > 80% |
-| Task pool depleted | On complete/UI open | Pool remaining < 3 days |
-| User chat signal | On message | Detects "too hard", "too busy", etc. |
-| Assessment updated | On assessment add | Significant level change |
+**Replan Triggers**
+| Event | Check | Trigger Condition | Reason |
+|-------|-------|------------------|--------|
+| Task skipped | On each skip | 3-day skip rate > 50% | `high_skip_rate` |
+| Optional all done | On optional complete | All optional tasks for cycle done | `high_optional_completion` |
+| Cycle ended | 4am daily check | day_in_cycle > cycle_days | `cycle_complete` |
+| Low completion | 4am daily check | 3-day daily completion rate < 50% | `low_completion` (→ `high_skip_rate`) |
+| User chat signal | On message | Detects "too hard", "too busy", etc. | `user_request` |
+| Assessment updated | On assessment add | Significant level change | `assessment_change` |
 
 **Replan Flow (MVP — AI-driven)**
 1. Server marks `replan_pending = true`
@@ -473,24 +502,26 @@ When user creates a reward conflicting with a goal:
 
 | Layer | Frequency | LLM | Description |
 |-------|-----------|-----|-------------|
-| Planning | Per replan event | Yes | LLM generates task template pool |
-| Execution | Daily | No | Rule engine selects today's tasks from pool |
+| Planning | Per cycle / replan event | Yes | LLM generates cycle-based daily_schedule + optional_pool |
+| Execution | Daily (4am default) | No | Rule engine dispatches today's tasks from daily_schedule |
 
-**Daily check sequence (lazy evaluation + scheduled):**
-1. Triggered on UI open OR by scheduler (node-cron at configured time)
-2. Check if yesterday's daily tasks were all completed → update streak
-3. Count today's tasks already allocated
-4. If task pool depleted → mark replan_pending
-5. Send OS notification if tasks pending (via node-notifier)
+**Daily check sequence (4am cron `runSystemCheck()`):**
+1. For each active goal: check if yesterday's daily tasks were all completed → `updateStreakOnSkip()`
+2. Check if plan cycle is complete (`day_in_cycle > cycle_days`) → `triggerReplan('cycle_complete')`
+3. Run comprehensive replan checks: skip rate + optional completion (via `checkAndTriggerReplan('daily_check')`)
+4. Call `getTodayTasks()` → `allocateDailyTasks()` dispatches today's day_schedule bundle
+5. Write `daily_check_run` activity log
+
+**Notification flow:**
+- No OS notifications (removed). Agent sends notifications via `mq_send_notification` → Discord webhook.
+- Agent checks `mq_get_replan_status()` at conversation start and notifies user of pending replans.
 
 **Daemon mode:**
 ```
 mochi-quest start --daemon   # server runs in background
+mochi-quest daily-check      # run system check manually (no LLM required)
 mochi-quest setup            # install login auto-start (platform-specific)
 ```
-- macOS: `~/Library/LaunchAgents/com.mochi-quest.plist`
-- Windows: Startup folder + VBS wrapper
-- Linux: `~/.config/systemd/user/mochi-quest.service`
 
 ---
 
@@ -559,7 +590,7 @@ interface SyncResult {
 | REST API | Hono | Lightweight, same process |
 | Database | SQLite (`better-sqlite3`) | Local persistence, zero deployment |
 | Scheduler | `node-cron` | Built into server, cross-platform |
-| Notifications | `node-notifier` | macOS/Windows/Linux native notifications |
+| Notifications | Discord webhook | Agent-driven; configured via settings |
 | Web UI | Vite + React + TypeScript | User preference |
 | UI Components | shadcn/ui + Tailwind CSS | Consistent design system |
 | Package Manager | pnpm workspaces (monorepo) | Efficient dependency management |

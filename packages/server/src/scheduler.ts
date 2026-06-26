@@ -1,42 +1,41 @@
 import cron from 'node-cron';
-import notifier from 'node-notifier';
-import { getDb } from './db/schema.js';
 import { getTodayTasks } from './db/queries/tasks.js';
 import { updateStreakOnSkip } from './db/queries/streaks.js';
 import { listGoals } from './db/queries/goals.js';
+import { getActivePlan, isCycleComplete } from './db/queries/plans.js';
 import { getSettings } from './db/queries/settings.js';
+import { checkAndTriggerReplan, triggerReplan } from './db/queries/replan.js';
+import { writeLog } from './db/queries/logs.js';
+import { getDb } from './db/schema.js';
 
 let scheduledTask: cron.ScheduledTask | null = null;
 
 export function startScheduler(): void {
-  scheduleFromSettings();
-}
-
-function scheduleFromSettings(): void {
   const settings = getSettings();
-  const [hour, minute] = settings.notification_time.split(':').map(Number);
+  const [hour, minute] = settings.daily_check_time.split(':').map(Number);
 
   if (scheduledTask) {
     scheduledTask.stop();
     scheduledTask = null;
   }
 
-  // Re-read settings every time the cron fires, in case user updated notification_time
-  scheduledTask = cron.schedule(`${minute ?? 0} ${hour ?? 8} * * *`, () => {
-    runDailyCheck().catch(err => console.error('[scheduler] daily-check error:', err));
+  scheduledTask = cron.schedule(`${minute ?? 0} ${hour ?? 4} * * *`, () => {
+    runSystemCheck().catch(err => console.error('[scheduler] daily-check error:', err));
   }, {
     timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
 
-  console.log(`[scheduler] Daily check scheduled at ${settings.notification_time}`);
+  console.log(`[scheduler] Daily check scheduled at ${settings.daily_check_time}`);
 }
 
-async function runDailyCheck(): Promise<void> {
+export async function runSystemCheck(): Promise<void> {
   const db = getDb();
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const activeGoals = listGoals('active');
+  const goalsChecked: string[] = [];
 
   for (const goal of activeGoals) {
+    // Update streak if yesterday's daily tasks weren't all completed
     const { count: completedCount } = db.prepare(
       `SELECT COUNT(*) as count FROM tasks WHERE goal_id=? AND task_type='daily' AND due_date=? AND status='completed'`
     ).get(goal.id, yesterday) as { count: number };
@@ -48,27 +47,30 @@ async function runDailyCheck(): Promise<void> {
     if (totalCount > 0 && completedCount < totalCount) {
       updateStreakOnSkip(goal.id);
     }
-  }
 
-  const todayTasks = getTodayTasks();
-  const pendingCount = todayTasks.filter(t => t.status === 'pending').length;
-
-  if (pendingCount > 0) {
-    try {
-      notifier.notify({
-        title: 'Mochi Quest',
-        message: `今天有 ${pendingCount} 個任務等你完成！`,
-        open: `http://localhost:${process.env.PORT ?? '3030'}`,
-        sound: false,
-      });
-      console.log(`[scheduler] Notified: ${pendingCount} pending tasks`);
-    } catch {
-      // No desktop environment (e.g. Docker) — notification skipped
-      console.log(`[scheduler] ${pendingCount} pending tasks (notification unavailable)`);
+    // Check if cycle is complete
+    const plan = getActivePlan(goal.id);
+    if (plan && isCycleComplete(plan) && !plan.replan_pending) {
+      triggerReplan(goal.id, 'cycle_complete');
+    } else if (plan && !plan.replan_pending) {
+      // Run comprehensive replan check (skip rate + optional completion)
+      checkAndTriggerReplan(goal.id, 'daily_check');
     }
-  } else {
-    console.log('[scheduler] Daily check: all tasks done or no tasks today');
+
+    goalsChecked.push(goal.id);
   }
+
+  // Allocate today's tasks (no-op if already allocated)
+  getTodayTasks();
+
+  writeLog({
+    event_type: 'daily_check_run',
+    title: '每日排程執行',
+    reason: `goals: ${goalsChecked.length}`,
+    metadata: { goals_checked: goalsChecked.length },
+  });
+
+  console.log(`[scheduler] Daily check complete. ${activeGoals.length} goals checked.`);
 }
 
 export function stopScheduler(): void {

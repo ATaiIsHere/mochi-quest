@@ -49,15 +49,24 @@ export function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">通知設定</CardTitle>
+            <CardTitle className="text-sm">排程與通知</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <SettingRow label="每日通知時間" hint="HH:MM 格式（daemon 模式下生效）">
+            <SettingRow label="每日排程時間" hint="系統自動 check（更新連勝、分配任務、重新規劃判斷），預設凌晨 4 點">
               <input
                 type="time"
-                value={form.notification_time ?? '08:00'}
-                onChange={e => setForm(f => ({ ...f, notification_time: e.target.value }))}
+                value={form.daily_check_time ?? '04:00'}
+                onChange={e => setForm(f => ({ ...f, daily_check_time: e.target.value }))}
                 className="rounded-md border bg-background px-2 py-1 text-sm"
+              />
+            </SettingRow>
+            <SettingRow label="Discord Webhook URL" hint="留空則不發送通知，Agent 可透過 mq_send_notification 發送">
+              <input
+                type="url"
+                value={form.discord_webhook_url ?? ''}
+                placeholder="https://discord.com/api/webhooks/..."
+                onChange={e => setForm(f => ({ ...f, discord_webhook_url: e.target.value }))}
+                className="w-64 rounded-md border bg-background px-2 py-1 text-sm"
               />
             </SettingRow>
             <SettingRow label="時區">

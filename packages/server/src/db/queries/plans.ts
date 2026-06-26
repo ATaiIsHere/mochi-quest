@@ -24,6 +24,11 @@ export interface TaskTemplate {
   tags: string[];
 }
 
+export interface DaySchedule {
+  day: number;
+  tasks: TaskTemplate[];
+}
+
 export interface Plan {
   id: string;
   goal_id: string;
@@ -32,6 +37,10 @@ export interface Plan {
   milestones: Milestone[];
   current_phase: string;
   task_template_pool: TaskTemplate[];
+  cycle_days: number;
+  cycle_start_date: string | null;
+  daily_schedule: DaySchedule[];
+  optional_template_pool: TaskTemplate[];
   replan_pending: boolean;
   created_reason: string;
   created_at: string;
@@ -44,6 +53,10 @@ function parsePlan(row: Record<string, unknown>): Plan {
     replan_pending: Boolean(row.replan_pending),
     milestones: JSON.parse(row.milestones as string || '[]'),
     task_template_pool: JSON.parse(row.task_template_pool as string || '[]'),
+    daily_schedule: JSON.parse(row.daily_schedule as string || '[]'),
+    optional_template_pool: JSON.parse(row.optional_template_pool as string || '[]'),
+    cycle_days: row.cycle_days as number ?? 7,
+    cycle_start_date: row.cycle_start_date as string | null ?? null,
   } as Plan;
 }
 
@@ -64,12 +77,16 @@ export interface CreatePlanInput {
   milestones?: Milestone[];
   current_phase?: string;
   task_template_pool?: TaskTemplate[];
+  cycle_days?: number;
+  daily_schedule?: DaySchedule[];
+  optional_template_pool?: TaskTemplate[];
   created_reason?: string;
 }
 
 export function createPlan(input: CreatePlanInput): Plan {
   const db = getDb();
   const id = randomUUID();
+  const today = new Date().toISOString().slice(0, 10);
 
   // Get next version number
   const lastVersion = (db.prepare('SELECT MAX(version) as v FROM plans WHERE goal_id = ?').get(input.goal_id) as { v: number | null }).v ?? 0;
@@ -79,8 +96,9 @@ export function createPlan(input: CreatePlanInput): Plan {
     db.prepare('UPDATE plans SET is_active = 0 WHERE goal_id = ? AND is_active = 1').run(input.goal_id);
 
     db.prepare(`
-      INSERT INTO plans (id, goal_id, version, is_active, milestones, current_phase, task_template_pool, created_reason)
-      VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+      INSERT INTO plans (id, goal_id, version, is_active, milestones, current_phase, task_template_pool,
+        cycle_days, cycle_start_date, daily_schedule, optional_template_pool, created_reason)
+      VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.goal_id,
@@ -88,6 +106,10 @@ export function createPlan(input: CreatePlanInput): Plan {
       JSON.stringify(input.milestones ?? []),
       input.current_phase ?? '',
       JSON.stringify(input.task_template_pool ?? []),
+      input.cycle_days ?? 7,
+      today,
+      JSON.stringify(input.daily_schedule ?? []),
+      JSON.stringify(input.optional_template_pool ?? []),
       input.created_reason ?? 'initial',
     );
   })();
@@ -95,6 +117,16 @@ export function createPlan(input: CreatePlanInput): Plan {
   const plan = getActivePlan(input.goal_id)!;
   writeLog({ event_type: 'plan_created', entity_type: 'plan', entity_id: id, goal_id: input.goal_id, title: `建立計劃 v${plan.version}`, reason: input.created_reason ?? 'initial' });
   return plan;
+}
+
+export function isCycleComplete(plan: Plan): boolean {
+  if (!plan.cycle_start_date || plan.daily_schedule.length === 0) return false;
+  const cycleStart = new Date(plan.cycle_start_date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  cycleStart.setHours(0, 0, 0, 0);
+  const dayInCycle = Math.floor((today.getTime() - cycleStart.getTime()) / 86400000) + 1;
+  return dayInCycle > plan.cycle_days;
 }
 
 export function setReplanPending(goalId: string, pending: boolean): void {

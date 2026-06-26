@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  Target, CheckCircle, XCircle, Calendar, FileText, RefreshCw, Activity,
+  Target, CheckCircle, XCircle, Calendar, FileText, RefreshCw, Activity, Bell,
 } from 'lucide-react';
 import { api, type ActivityLog } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,6 +15,8 @@ const EVENT_CONFIG: Record<string, { icon: React.ElementType; color: string; lab
   daily_allocated:     { icon: Calendar,    color: 'text-sky-500',    label: '每日分配' },
   plan_created:        { icon: FileText,    color: 'text-indigo-500', label: '建立計劃' },
   replan_triggered:    { icon: RefreshCw,   color: 'text-amber-500',  label: '重新規劃' },
+  daily_check_run:     { icon: Bell,        color: 'text-sky-400',    label: '每日排程' },
+  cycle_complete:      { icon: RefreshCw,   color: 'text-violet-500', label: '週期結束' },
 };
 
 function eventConfig(type: string) {

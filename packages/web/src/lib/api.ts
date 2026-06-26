@@ -78,6 +78,11 @@ export interface GoalSummary extends Goal {
   current_streak?: number;
 }
 
+export interface DaySchedule {
+  day: number;
+  tasks: TaskTemplate[];
+}
+
 export interface Plan {
   id: string;
   goal_id: string;
@@ -86,6 +91,10 @@ export interface Plan {
   milestones: Milestone[];
   current_phase: string;
   task_template_pool: TaskTemplate[];
+  cycle_days: number;
+  cycle_start_date: string | null;
+  daily_schedule: DaySchedule[];
+  optional_template_pool: TaskTemplate[];
   replan_pending: boolean;
   created_reason: string;
   created_at: string;
@@ -175,7 +184,8 @@ export interface StreaksData {
 
 export interface Settings {
   daily_task_total_limit: number;
-  notification_time: string;
+  daily_check_time: string;
+  discord_webhook_url: string;
   timezone: string;
   log_retention_days: number;
 }

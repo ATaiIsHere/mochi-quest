@@ -25,7 +25,7 @@ switch (command) {
 
   case 'daily-check':
     // Lightweight daily check — no LLM, pure DB
-    await runDailyCheck();
+    await (await import('./scheduler.js')).runSystemCheck();
     break;
 
   case 'setup':
@@ -38,51 +38,6 @@ switch (command) {
     process.exit(1);
 }
 
-async function runDailyCheck(): Promise<void> {
-  const { getDb } = await import('./db/schema.js');
-  const { getTodayTasks } = await import('./db/queries/tasks.js');
-  const { updateStreakOnSkip } = await import('./db/queries/streaks.js');
-  const { listGoals } = await import('./db/queries/goals.js');
-  const notifier = await import('node-notifier');
-
-  // Ensure DB is initialized
-  getDb();
-
-  // Check yesterday's completion and update streaks
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  const activeGoals = listGoals('active');
-
-  for (const goal of activeGoals) {
-    const db = getDb();
-    const yesterdayCompleted = db.prepare(`
-      SELECT COUNT(*) as count FROM tasks
-      WHERE goal_id = ? AND task_type = 'daily' AND due_date = ? AND status = 'completed'
-    `).get(goal.id, yesterday) as { count: number };
-
-    const yesterdayTotal = db.prepare(`
-      SELECT COUNT(*) as count FROM tasks
-      WHERE goal_id = ? AND task_type = 'daily' AND due_date = ?
-    `).get(goal.id, yesterday) as { count: number };
-
-    if (yesterdayTotal.count > 0 && yesterdayCompleted.count < yesterdayTotal.count) {
-      updateStreakOnSkip(goal.id);
-    }
-  }
-
-  // Get today's tasks
-  const todayTasks = getTodayTasks();
-  const pendingCount = todayTasks.filter(t => t.status === 'pending').length;
-
-  if (pendingCount > 0) {
-    notifier.default.notify({
-      title: 'Mochi Quest 🎯',
-      message: `今天有 ${pendingCount} 個任務等你完成！`,
-      open: 'http://localhost:3030',
-    });
-  }
-
-  console.log(`Daily check complete. ${pendingCount} tasks pending today.`);
-}
 
 async function runSetup(): Promise<void> {
   const os = await import('node:os');

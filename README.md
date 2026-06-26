@@ -11,14 +11,15 @@ Mochi Quest lets you describe your goals — lose weight, learn English, become 
 ## Features
 
 - **Goal clarification** — AI interviews you to understand your situation, constraints, and current level before building a plan
-- **Two-layer task system** — AI pre-generates a task pool; daily allocation runs instantly from the DB (no LLM latency)
-- **Dynamic replan** — triggers automatically when skip rate is high, you're breezing through optional tasks, or your task pool runs low
+- **Cycle-based planning** — AI plans a full cycle (7–14 days) with a per-day task menu; daily allocation runs instantly from the DB (no LLM latency)
+- **Dynamic replan** — triggers automatically at cycle end, when skip rate is high, or when all optional tasks are done (too easy)
 - **Multi-goal balance** — set a weight per goal; daily tasks are allocated proportionally within your daily limit
 - **Coin + reward system** — earn coins from tasks, redeem for self-defined rewards; AI adjusts pricing if a reward conflicts with your goals
 - **Streak tracking** — per-goal streaks + global streak (all goals done = global +1); milestone bonuses at 7/30/100/365 days
 - **Web dashboard** — local UI for checking off tasks, viewing plan roadmap, wallet, and streaks
 - **Real-time updates** — SSE pushes replan completion to the UI instantly
-- **Background daemon** — `node-cron` daily check + cross-platform notifications (macOS / Windows / Linux) even when you haven't opened the app
+- **Background daemon** — `node-cron` daily check at 4am (configurable): streak update, task allocation, cycle-end detection, replan flagging
+- **Discord notifications** — configure a webhook; the AI agent sends you daily summaries and replan alerts via Discord
 
 ---
 
@@ -41,7 +42,7 @@ Mochi Quest lets you describe your goals — lose weight, learn English, become 
 │  │    SQLite  (~/.mochi-quest/data.db) │ │
 │  └─────────────────────────────────────┘ │
 │  REST API :3030  ←──── Web UI (React)    │
-│  node-cron + node-notifier (daemon)      │
+│  node-cron (4am daily check, daemon)     │
 └──────────────────────────────────────────┘
 ```
 
@@ -131,6 +132,7 @@ Then install `skills/mochi-quest/` as a skill (or paste the SKILL.md body into y
 | `mq_add_assessment` / `mq_get_user_state` | Track progress assessments |
 | `mq_get_streak` / `mq_get_streak_milestones` | Streak info |
 | `mq_get_replan_status` | Check if AI action is needed |
+| `mq_send_notification` | Send a message to configured Discord channel |
 | `mq_get_settings` / `mq_update_settings` | Global settings |
 
 Full tool reference: [`packages/skill/SKILL.md`](packages/skill/SKILL.md)
@@ -166,18 +168,19 @@ mochi-quest/
 
 ### Planning vs Execution
 
-The AI generates a **task template pool** (7–14 days of tasks) during planning sessions. The server allocates daily tasks from this pool using a rule engine — no LLM call needed, so the UI loads instantly.
+The AI generates a **cycle-based plan** (7–14 days) during planning sessions — a day-by-day schedule where each day has specific tasks, plus an optional pool for the whole cycle. The server allocates daily tasks by `day_in_cycle` with no LLM call, so the UI loads instantly.
 
 ### Event-driven Replan
 
-The server monitors four signals and marks `replan_pending = true` when triggered:
+The server monitors signals and marks `replan_pending = true` when triggered:
 
-| Signal | Threshold |
-|--------|-----------|
-| Skip rate | >50% over last 3 days |
-| Optional completion rate | >80% over last 3 days (too easy) |
-| Task pool size | <3 days remaining |
-| Assessment change | New assessment recorded |
+| Signal | Trigger | Threshold |
+|--------|---------|-----------|
+| Cycle ended | `cycle_complete` | `day_in_cycle > cycle_days` |
+| Low completion | `low_completion` | Daily completion rate too low over last 3 days |
+| All optionals done | `high_optional_completion` | Optional pool fully completed (too easy) |
+| Assessment change | `assessment_change` | New assessment recorded |
+| User request | `user_request` | User asks for a plan change |
 
 The AI checks `mq_get_replan_status()` at the start of each conversation and regenerates the plan if needed.
 

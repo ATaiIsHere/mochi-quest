@@ -8,6 +8,7 @@ import { taskTools } from './tools/tasks.js';
 import { rewardTools } from './tools/rewards.js';
 import { assessmentTools } from './tools/assessments.js';
 import { dashboardTools } from './tools/dashboard.js';
+import { notificationTools } from './tools/notifications.js';
 
 export interface McpTool {
   name: string;
@@ -25,6 +26,7 @@ const ALL_TOOLS = [
   ...rewardTools,
   ...assessmentTools,
   ...dashboardTools,
+  ...notificationTools,
 ];
 
 function zodToJsonSchema(schema: z.ZodObject<z.ZodRawShape>): Record<string, unknown> {

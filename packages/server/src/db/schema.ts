@@ -34,6 +34,7 @@ function runMigrations(db: Database.Database): void {
   const migrations: Array<{ version: number; sql: string }> = [
     { version: 1, sql: MIGRATION_1 },
     { version: 2, sql: MIGRATION_2 },
+    { version: 3, sql: MIGRATION_3 },
   ];
 
   for (const m of migrations) {
@@ -199,4 +200,14 @@ const MIGRATION_2 = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON activity_logs(timestamp DESC);
+`;
+
+const MIGRATION_3 = `
+  ALTER TABLE plans ADD COLUMN cycle_days INTEGER NOT NULL DEFAULT 7;
+  ALTER TABLE plans ADD COLUMN cycle_start_date TEXT;
+  ALTER TABLE plans ADD COLUMN daily_schedule TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE plans ADD COLUMN optional_template_pool TEXT NOT NULL DEFAULT '[]';
+
+  ALTER TABLE user_settings ADD COLUMN daily_check_time TEXT NOT NULL DEFAULT '04:00';
+  ALTER TABLE user_settings ADD COLUMN discord_webhook_url TEXT NOT NULL DEFAULT '';
 `;
