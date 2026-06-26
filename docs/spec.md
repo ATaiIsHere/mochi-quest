@@ -1,8 +1,8 @@
 # Mochi Quest — System Specification
 
-> Version: 0.1.0  
+> Version: 0.2.0  
 > Status: Draft  
-> Last Updated: 2026-06-24
+> Last Updated: 2026-06-26
 
 ## Overview
 
@@ -253,6 +253,7 @@ interface UserSettings {
   daily_task_total_limit: number;  // max tasks per day across all goals (default: 5)
   notification_time: string;       // HH:MM format (default: "08:00")
   timezone: string;                // e.g. "Asia/Taipei"
+  log_retention_days: number;      // auto-prune activity logs older than N days (default: 3)
   llm_provider?: {                 // for server-driven replan (Phase 4+)
     provider: 'anthropic' | 'openai' | 'custom';
     api_key: string;
@@ -261,6 +262,41 @@ interface UserSettings {
   };
 }
 ```
+
+### ActivityLog
+
+Immutable record of system mutations. Written on every create/update/status-change, pruned
+automatically based on `UserSettings.log_retention_days`.
+
+```typescript
+interface ActivityLog {
+  id: string;
+  event_type:
+    | 'goal_created' | 'goal_updated' | 'goal_status_changed'
+    | 'task_completed' | 'task_skipped' | 'daily_allocated'
+    | 'plan_created' | 'replan_triggered';
+  entity_type: 'goal' | 'task' | 'plan' | 'system';
+  entity_id: string | null;
+  goal_id: string | null;
+  title: string;        // human-readable summary (Chinese)
+  reason: string;       // e.g. skip reason, new status, replan trigger cause
+  metadata: Record<string, unknown>;  // e.g. { coin_reward, date, count }
+  timestamp: string;
+}
+```
+
+**Event sources:**
+
+| event_type | Triggered in | Typical reason/metadata |
+|---|---|---|
+| `goal_created` | `createGoal()` | — |
+| `goal_updated` | `updateGoal()` | — |
+| `goal_status_changed` | `setGoalStatus()` | reason = new status |
+| `task_completed` | `completeTask()` | metadata.coin_reward |
+| `task_skipped` | `skipTask()` | reason = skip reason |
+| `daily_allocated` | `allocateDailyTasks()` | metadata.date, metadata.count |
+| `plan_created` | `createPlan()` | reason = created_reason |
+| `replan_triggered` | `triggerReplan()` | reason = trigger cause |
 
 ---
 
@@ -374,6 +410,8 @@ GET    /api/goals/:id/progress
 
 GET    /api/settings
 PATCH  /api/settings
+
+GET    /api/logs?limit=100   # activity log (max 200 entries, most recent first)
 
 GET    /api/events   # SSE endpoint for real-time UI updates
 ```
@@ -568,7 +606,8 @@ mochi-quest/
 │   │   │   │   ├── Goals.tsx
 │   │   │   │   ├── Plan.tsx          # roadmap + plan history
 │   │   │   │   ├── Tasks.tsx         # daily + optional tasks
-│   │   │   │   └── Wallet.tsx        # coins + rewards
+│   │   │   │   ├── Wallet.tsx        # coins + rewards
+│   │   │   │   └── LogsPage.tsx      # activity log timeline
 │   │   │   ├── components/
 │   │   │   ├── hooks/
 │   │   │   │   └── useSSE.ts         # SSE connection for real-time updates
@@ -595,7 +634,7 @@ mochi-quest/
 
 ### Phase 2: Web UI
 - React + Vite + shadcn/ui setup
-- Dashboard, Goals, Plan (roadmap), Tasks (daily/optional), Wallet pages
+- Dashboard, Goals, Plan (roadmap), Tasks (daily/optional), Wallet, Logs pages
 - SSE connection for real-time updates (replan badge, task completion sync)
 
 ### Phase 3: AI Behavior + Scheduler
