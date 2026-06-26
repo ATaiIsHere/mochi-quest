@@ -11,6 +11,7 @@ import { getWallet, getTransactions } from '../db/queries/wallet.js';
 import { listRewards, redeemReward } from '../db/queries/rewards.js';
 import { getAllStreaks, getStreakMilestones } from '../db/queries/streaks.js';
 import { getSettings, updateSettings } from '../db/queries/settings.js';
+import { getLogs } from '../db/queries/logs.js';
 import { getGoal as _getGoal } from '../db/queries/goals.js';
 import { getActivePlan as _getActivePlan } from '../db/queries/plans.js';
 import { getUserState, getAssessments } from '../db/queries/assessments.js';
@@ -190,6 +191,12 @@ app.get('/api/settings', (c) => c.json(getSettings()));
 app.patch('/api/settings', async (c) => {
   const body = await c.req.json();
   return c.json(updateSettings(body));
+});
+
+// Activity logs
+app.get('/api/logs', (c) => {
+  const limit = Math.min(200, Math.max(1, Number.parseInt(c.req.query('limit') ?? '100', 10)));
+  return c.json({ logs: getLogs(limit) });
 });
 
 // Dashboard

@@ -5,6 +5,7 @@ import { listGoals } from './goals.js';
 import { addCoins } from './wallet.js';
 import { updateStreakOnComplete, updateStreakOnSkip } from './streaks.js';
 import { checkAndTriggerReplan } from '../queries/replan.js';
+import { writeLog } from './logs.js';
 
 export interface Task {
   id: string;
@@ -87,6 +88,9 @@ function allocateDailyTasks(date: string): Task[] {
     updateTaskTemplatePool(goal.id, remaining);
   }
 
+  if (allocated.length > 0) {
+    writeLog({ event_type: 'daily_allocated', title: `今日任務分配：${date}（${allocated.length} 個）`, metadata: { date, count: allocated.length } });
+  }
   return allocated;
 }
 
@@ -167,6 +171,7 @@ export function completeTask(id: string, notes?: string): Task | null {
   // Check if replan needed
   checkAndTriggerReplan(task.goal_id, 'task_completed');
 
+  writeLog({ event_type: 'task_completed', entity_type: 'task', entity_id: id, goal_id: task.goal_id, title: `完成任務：${task.title}`, metadata: { coin_reward: task.coin_reward } });
   return getTask(id);
 }
 
@@ -182,6 +187,7 @@ export function skipTask(id: string, reason: string): Task | null {
     checkAndTriggerReplan(task.goal_id, 'task_skipped');
   }
 
+  writeLog({ event_type: 'task_skipped', entity_type: 'task', entity_id: id, goal_id: task.goal_id, title: `略過任務：${task.title}`, reason });
   return getTask(id);
 }
 

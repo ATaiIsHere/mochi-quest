@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Target, ListTodo, Wallet, Settings } from 'lucide-react';
+import { LayoutDashboard, Target, ListTodo, Wallet, Settings, ScrollText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -7,6 +7,7 @@ const navItems = [
   { to: '/goals', icon: Target, label: '目標' },
   { to: '/tasks', icon: ListTodo, label: '任務' },
   { to: '/wallet', icon: Wallet, label: '錢包' },
+  { to: '/logs', icon: ScrollText, label: '日誌' },
   { to: '/settings', icon: Settings, label: '設定' },
 ];
 

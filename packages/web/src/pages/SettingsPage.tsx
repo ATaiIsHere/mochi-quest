@@ -74,6 +74,24 @@ export function SettingsPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-sm">日誌設定</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <SettingRow label="日誌保留天數" hint="自動刪除超過 N 天的日誌（1-30）">
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={form.log_retention_days ?? 3}
+                onChange={e => setForm(f => ({ ...f, log_retention_days: Number(e.target.value) }))}
+                className="w-20 rounded-md border bg-background px-2 py-1 text-sm"
+              />
+            </SettingRow>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-sm">系統資訊</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground space-y-1">

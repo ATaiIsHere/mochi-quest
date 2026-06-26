@@ -49,6 +49,9 @@ export const api = {
   dashboard: {
     get: () => req<Dashboard>('/dashboard'),
   },
+  logs: {
+    list: (limit = 100) => req<{ logs: ActivityLog[] }>(`/logs?limit=${limit}`),
+  },
 };
 
 // ── Types (mirrors server models) ────────────────────────────────────────────
@@ -174,6 +177,19 @@ export interface Settings {
   daily_task_total_limit: number;
   notification_time: string;
   timezone: string;
+  log_retention_days: number;
+}
+
+export interface ActivityLog {
+  id: string;
+  event_type: string;
+  entity_type: string;
+  entity_id: string | null;
+  goal_id: string | null;
+  title: string;
+  reason: string;
+  metadata: Record<string, unknown>;
+  timestamp: string;
 }
 
 export interface Dashboard {

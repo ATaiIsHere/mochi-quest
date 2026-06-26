@@ -1,6 +1,7 @@
 import { getDb } from '../schema.js';
 import { getSkipRateLast3Days, getOptionalCompletionRateLast3Days } from './tasks.js';
 import { getActivePlan, setReplanPending } from './plans.js';
+import { writeLog } from './logs.js';
 
 const SKIP_RATE_THRESHOLD = 0.5;
 const OPTIONAL_COMPLETION_THRESHOLD = 0.8;
@@ -52,6 +53,7 @@ export function checkAndTriggerReplan(goalId: string, event: TriggerReason): voi
 export function triggerReplan(goalId: string, reason: TriggerReason): void {
   const db = getDb();
   db.prepare('UPDATE plans SET replan_pending = 1, created_reason = ? WHERE goal_id = ? AND is_active = 1').run(reason, goalId);
+  writeLog({ event_type: 'replan_triggered', goal_id: goalId, title: '觸發重新規劃', reason });
   // Emit SSE event for UI to show "AI is re-planning..." badge
   emitSseEvent('replan_pending', { goal_id: goalId, reason });
 }

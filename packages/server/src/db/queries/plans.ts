@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../schema.js';
+import { writeLog } from './logs.js';
 
 export interface Milestone {
   title: string;
@@ -91,7 +92,9 @@ export function createPlan(input: CreatePlanInput): Plan {
     );
   })();
 
-  return getActivePlan(input.goal_id)!;
+  const plan = getActivePlan(input.goal_id)!;
+  writeLog({ event_type: 'plan_created', entity_type: 'plan', entity_id: id, goal_id: input.goal_id, title: `建立計劃 v${plan.version}`, reason: input.created_reason ?? 'initial' });
+  return plan;
 }
 
 export function setReplanPending(goalId: string, pending: boolean): void {

@@ -33,6 +33,7 @@ function runMigrations(db: Database.Database): void {
 
   const migrations: Array<{ version: number; sql: string }> = [
     { version: 1, sql: MIGRATION_1 },
+    { version: 2, sql: MIGRATION_2 },
   ];
 
   for (const m of migrations) {
@@ -180,4 +181,22 @@ const MIGRATION_1 = `
   );
 
   INSERT OR IGNORE INTO user_settings (id) VALUES (1);
+`;
+
+const MIGRATION_2 = `
+  ALTER TABLE user_settings ADD COLUMN log_retention_days INTEGER NOT NULL DEFAULT 3;
+
+  CREATE TABLE IF NOT EXISTS activity_logs (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL DEFAULT 'system',
+    entity_id TEXT,
+    goal_id TEXT,
+    title TEXT NOT NULL DEFAULT '',
+    reason TEXT NOT NULL DEFAULT '',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON activity_logs(timestamp DESC);
 `;

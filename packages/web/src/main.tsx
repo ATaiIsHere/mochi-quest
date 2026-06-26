@@ -8,6 +8,7 @@ import { GoalDetailPage } from './pages/GoalDetail';
 import { TasksPage } from './pages/Tasks';
 import { WalletPage } from './pages/Wallet';
 import { SettingsPage } from './pages/SettingsPage';
+import { LogsPage } from './pages/LogsPage';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -20,6 +21,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="goals/:id" element={<GoalDetailPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="wallet" element={<WalletPage />} />
+          <Route path="logs" element={<LogsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

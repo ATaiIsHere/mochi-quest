@@ -5,6 +5,7 @@ export interface UserSettings {
   notification_time: string;
   timezone: string;
   llm_provider: Record<string, unknown> | null;
+  log_retention_days: number;
 }
 
 export function getSettings(): UserSettings {
@@ -15,6 +16,7 @@ export function getSettings(): UserSettings {
     notification_time: row.notification_time as string,
     timezone: row.timezone as string,
     llm_provider: row.llm_provider ? JSON.parse(row.llm_provider as string) : null,
+    log_retention_days: row.log_retention_days as number,
   };
 }
 
@@ -38,6 +40,10 @@ export function updateSettings(updates: Partial<UserSettings>): UserSettings {
   if (updates.llm_provider !== undefined) {
     fields.push('llm_provider = ?');
     values.push(updates.llm_provider ? JSON.stringify(updates.llm_provider) : null);
+  }
+  if (updates.log_retention_days !== undefined) {
+    fields.push('log_retention_days = ?');
+    values.push(Math.max(1, Math.min(30, updates.log_retention_days)));
   }
 
   if (fields.length > 0) {
