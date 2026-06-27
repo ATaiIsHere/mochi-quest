@@ -183,7 +183,6 @@ export interface StreaksData {
 }
 
 export interface Settings {
-  daily_task_total_limit: number;
   daily_check_time: string;
   discord_webhook_url: string;
   timezone: string;

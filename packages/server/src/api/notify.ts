@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { getSettings } from '../db/queries/settings.js';
 
 // Server-side pre-filter conditions per event type.
@@ -24,10 +25,20 @@ export async function notifyAgentWebhook(
   const condition = WEBHOOK_CONDITIONS[type];
   if (condition && !condition(data.metadata ?? {})) return;
 
+  const body = JSON.stringify({ event: type, event_type: type, ...data, timestamp: new Date().toISOString() });
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-GitHub-Event': type,
+  };
+  const secret = process.env.AGENT_WEBHOOK_SECRET;
+  if (secret) {
+    headers['X-Hub-Signature-256'] = `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
+  }
+
   await fetch(agent_webhook_url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ event: type, ...data, timestamp: new Date().toISOString() }),
+    headers,
+    body,
   }).catch(err => console.error(`[webhook] ${type} failed:`, err));
 }
 

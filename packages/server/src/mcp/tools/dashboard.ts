@@ -90,7 +90,7 @@ export const dashboardTools: McpTool[] = [
   },
   {
     name: 'mq_get_settings',
-    description: 'Get global settings (notification time, daily task limit, etc.).',
+    description: 'Get global settings (notification time, timezone, webhooks, etc.).',
     inputSchema: z.object({}),
     handler: async () => getSettings(),
   },
@@ -98,7 +98,6 @@ export const dashboardTools: McpTool[] = [
     name: 'mq_update_settings',
     description: 'Update global settings.',
     inputSchema: z.object({
-      daily_task_total_limit: z.number().min(1).max(20).optional(),
       notification_time: z.string().regex(/^\d{2}:\d{2}$/).optional().describe('HH:MM format'),
       timezone: z.string().optional(),
     }),

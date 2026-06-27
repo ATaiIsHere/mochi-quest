@@ -49,7 +49,7 @@ When a user describes a new goal, **do not create it immediately**. Gather enoug
 
 Once confirmed, call:
 ```
-mq_create_goal(title, category, definition, success_criteria, deadline, lifestyle_context, daily_task_weight)
+mq_create_goal(title, category, definition, success_criteria, deadline, lifestyle_context)
 mq_update_user_state(goal_id, current_level_description, strengths, weaknesses)
 mq_generate_plan(goal_id, milestones, current_phase, cycle_days, daily_schedule, optional_pool, created_reason: 'initial')
 ```
@@ -185,9 +185,9 @@ Assessment types are free-form strings — name them descriptively:
 
 ## Multi-Goal Balance
 
-- Respect `daily_task_weight` (1–5) per goal — higher weight = more daily tasks allocated
-- If the user wants to focus more on one goal: `mq_update_goal(id, daily_task_weight: N)`
-- If total daily tasks feel overwhelming: suggest reducing a weight or pausing a goal
+- Current cycle-based plans do **not** use a global daily-task limit.
+- Daily task count comes from each goal's `daily_schedule[day].tasks` bundle; a day can have zero, one, or multiple tasks per goal.
+- If total daily tasks feel overwhelming, regenerate the affected plans with fewer tasks per day or pause a goal.
 
 ---
 

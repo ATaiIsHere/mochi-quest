@@ -108,14 +108,9 @@ function allocateDailyTasks(date: string): Task[] {
         }
       }
     } else if (plan.task_template_pool.length > 0) {
-      // Legacy sequential pool (backward compatibility)
-      const settings = db.prepare('SELECT daily_task_total_limit FROM user_settings WHERE id = 1').get() as { daily_task_total_limit: number };
-      const budget = settings?.daily_task_total_limit ?? 5;
-      const totalWeight = activeGoals.reduce((sum, g) => sum + g.daily_task_weight, 0);
-      const allocation = Math.max(1, Math.round(budget * goal.daily_task_weight / totalWeight));
-
+      // Legacy sequential pool (backward compatibility): one template per goal per day.
       const pool = plan.task_template_pool.filter(t => t.task_type === 'daily');
-      const selected = pool.slice(0, allocation);
+      const selected = pool.slice(0, 1);
 
       for (const template of selected) {
         const task = createTask({ plan_id: plan.id, goal_id: goal.id, ...template, due_date: date });

@@ -33,8 +33,8 @@ export interface WriteLogInput {
 export function writeLog(input: WriteLogInput): void {
   const db = getDb();
   db.prepare(`
-    INSERT INTO activity_logs (id, event_type, entity_type, entity_id, goal_id, title, reason, metadata)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO activity_logs (id, event_type, entity_type, entity_id, goal_id, title, reason, metadata, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     randomUUID(),
     input.event_type,
@@ -44,6 +44,7 @@ export function writeLog(input: WriteLogInput): void {
     input.title,
     input.reason ?? '',
     JSON.stringify(input.metadata ?? {}),
+    new Date().toISOString(),
   );
   pruneOldLogs();
 }

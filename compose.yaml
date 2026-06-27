@@ -10,6 +10,9 @@ services:
       PORT: ${PORT:-3030}
       MOCHI_QUEST_DB: /data/data.db
       MOCHI_QUEST_WEB_DIST: /app/packages/web/dist
+      AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - mochi_quest_data:/data
     ports:

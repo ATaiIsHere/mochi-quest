@@ -19,26 +19,59 @@ const EVENT_CONFIG: Record<string, { icon: React.ElementType; color: string; lab
   cycle_complete:      { icon: RefreshCw,   color: 'text-violet-500', label: '週期結束' },
 };
 
+const DEFAULT_TIME_ZONE = 'Asia/Taipei';
+
 function eventConfig(type: string) {
   return EVENT_CONFIG[type] ?? { icon: Activity, color: 'text-muted-foreground', label: type };
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const hh = d.getHours().toString().padStart(2, '0');
-  const mm = d.getMinutes().toString().padStart(2, '0');
-  return `${hh}:${mm}`;
+function parseTimestamp(timestamp: string): Date {
+  const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp);
+  const normalized = hasExplicitZone ? timestamp : `${timestamp.replace(' ', 'T')}Z`;
+  return new Date(normalized);
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function safeTimeZone(timeZone: string): string {
+  try {
+    new Intl.DateTimeFormat('zh-TW', { timeZone }).format(new Date());
+    return timeZone;
+  } catch {
+    return DEFAULT_TIME_ZONE;
+  }
 }
 
-function groupByDate(logs: ActivityLog[]): { date: string; entries: ActivityLog[] }[] {
+function dateParts(date: Date, timeZone: string): Record<string, string> {
+  return Object.fromEntries(
+    new Intl.DateTimeFormat('zh-TW', {
+      timeZone: safeTimeZone(timeZone),
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(date).map(part => [part.type, part.value]),
+  );
+}
+
+function formatTime(timestamp: string, timeZone: string): string {
+  const d = parseTimestamp(timestamp);
+  if (Number.isNaN(d.getTime())) return '--:--';
+  const parts = dateParts(d, timeZone);
+  return `${parts.hour}:${parts.minute}`;
+}
+
+function formatDate(timestamp: string, timeZone: string): string {
+  const d = parseTimestamp(timestamp);
+  if (Number.isNaN(d.getTime())) return 'unknown-date';
+  const parts = dateParts(d, timeZone);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function groupByDate(logs: ActivityLog[], timeZone: string): { date: string; entries: ActivityLog[] }[] {
   const map = new Map<string, ActivityLog[]>();
   for (const log of logs) {
-    const date = formatDate(log.timestamp);
+    const date = formatDate(log.timestamp, timeZone);
     if (!map.has(date)) map.set(date, []);
     map.get(date)!.push(log);
   }
@@ -47,11 +80,14 @@ function groupByDate(logs: ActivityLog[]): { date: string; entries: ActivityLog[
 
 export function LogsPage() {
   const [groups, setGroups] = useState<{ date: string; entries: ActivityLog[] }[]>([]);
+  const [timeZone, setTimeZone] = useState(DEFAULT_TIME_ZONE);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const data = await api.logs.list(100);
-    setGroups(groupByDate(data.logs));
+    const [data, settings] = await Promise.all([api.logs.list(100), api.settings.get()]);
+    const configuredTimeZone = settings.timezone || DEFAULT_TIME_ZONE;
+    setTimeZone(configuredTimeZone);
+    setGroups(groupByDate(data.logs, configuredTimeZone));
     setLoading(false);
   }, []);
 
@@ -85,7 +121,7 @@ export function LogsPage() {
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-0.5 shrink-0">
-                        <span className="text-xs text-muted-foreground">{formatTime(log.timestamp)}</span>
+                        <span className="text-xs text-muted-foreground">{formatTime(log.timestamp, timeZone)}</span>
                         <span className="text-xs text-muted-foreground/60">{label}</span>
                       </div>
                     </div>

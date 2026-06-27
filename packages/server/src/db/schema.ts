@@ -176,7 +176,6 @@ const MIGRATION_1 = `
 
   CREATE TABLE IF NOT EXISTS user_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    daily_task_total_limit INTEGER NOT NULL DEFAULT 5,
     notification_time TEXT NOT NULL DEFAULT '08:00',
     timezone TEXT NOT NULL DEFAULT 'Asia/Taipei',
     llm_provider TEXT
@@ -197,7 +196,7 @@ const MIGRATION_2 = `
     title TEXT NOT NULL DEFAULT '',
     reason TEXT NOT NULL DEFAULT '',
     metadata TEXT NOT NULL DEFAULT '{}',
-    timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+    timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   );
 
   CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON activity_logs(timestamp DESC);

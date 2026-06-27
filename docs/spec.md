@@ -266,7 +266,6 @@ interface StreakMilestone {
 
 ```typescript
 interface UserSettings {
-  daily_task_total_limit: number;  // max tasks per day across all goals (default: 5, legacy)
   daily_check_time: string;        // HH:MM format, when system check runs (default: "04:00")
   discord_webhook_url: string;     // Discord webhook for agent-driven notifications (empty = disabled)
   timezone: string;                // e.g. "Asia/Taipei"
@@ -552,11 +551,10 @@ The AI coach has no rigid templates. It reasons from first principles for each u
 - Difficulty 5-7/10 for daily tasks; coin reward = f(difficulty, duration)
 - Clear `created_reason` for every plan so the user can understand why it changed
 
-**Multi-Goal Daily Balancing (Execution Layer — rule engine)**
-```
-daily_budget = UserSettings.daily_task_total_limit
-goal_allocation[i] = round(budget × goal[i].daily_task_weight / sum(weights))
-```
+**Daily Dispatch (Execution Layer — rule engine)**
+- Cycle-based plans dispatch the exact `daily_schedule[day].tasks` bundle for each active goal.
+- There is no global daily-task limit in the current execution path.
+- A day can contain zero, one, or multiple tasks per goal; task count is controlled by the generated plan, not by settings.
 
 **Reward Pricing Review**
 When user creates a reward conflicting with a goal:

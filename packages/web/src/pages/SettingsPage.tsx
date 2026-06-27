@@ -31,24 +31,6 @@ export function SettingsPage() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">任務設定</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <SettingRow label="每日任務上限" hint="所有目標合計的每日任務數（1-20）">
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={form.daily_task_total_limit ?? 5}
-                onChange={e => setForm(f => ({ ...f, daily_task_total_limit: Number(e.target.value) }))}
-                className="w-20 rounded-md border bg-background px-2 py-1 text-sm"
-              />
-            </SettingRow>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle className="text-sm">排程與通知</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

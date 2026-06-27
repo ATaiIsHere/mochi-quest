@@ -1,7 +1,6 @@
 import { getDb } from '../schema.js';
 
 export interface UserSettings {
-  daily_task_total_limit: number;
   daily_check_time: string;
   discord_webhook_url: string;
   timezone: string;
@@ -15,7 +14,6 @@ export function getSettings(): UserSettings {
   const db = getDb();
   const row = db.prepare('SELECT * FROM user_settings WHERE id = 1').get() as Record<string, unknown>;
   return {
-    daily_task_total_limit: row.daily_task_total_limit as number,
     daily_check_time: (row.daily_check_time as string) || '04:00',
     discord_webhook_url: (row.discord_webhook_url as string) || '',
     timezone: row.timezone as string,
@@ -31,10 +29,6 @@ export function updateSettings(updates: Partial<UserSettings>): UserSettings {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.daily_task_total_limit !== undefined) {
-    fields.push('daily_task_total_limit = ?');
-    values.push(updates.daily_task_total_limit);
-  }
   if (updates.daily_check_time !== undefined) {
     fields.push('daily_check_time = ?');
     values.push(updates.daily_check_time);
