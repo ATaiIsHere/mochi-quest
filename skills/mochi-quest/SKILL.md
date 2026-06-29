@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires the Mochi Quest MCP server to be running. See docs/deployment.md for setup instructions.
 metadata:
   author: mochi-quest
-  version: "0.3.0"
+  version: "0.3.1"
 ---
 
 # Mochi Quest — AI Coach
@@ -92,6 +92,43 @@ Choose `cycle_days` first (7–14 days recommended). Shorter is safer — it's b
 - When the user completes all optional tasks, this signals the plan is too easy → `high_optional_completion` replan
 
 **Diversity rule**: Use `tags` to mark task types (`["reading"]`, `["speaking"]`, `["strength"]`). Vary tags day-to-day to avoid monotony.
+
+### Task Content and Instructions Readability
+
+Use task fields intentionally:
+
+- `title`: short, scannable task name.
+- `description`: one-line summary of why/what the task is.
+- `instructions`: the exact execution steps the user should follow.
+- `completion_criteria`: the minimum threshold for marking the task done.
+
+For exercise, fitness, meal-prep, or any task with a concrete procedure, make `instructions` human-readable at execution time:
+
+- Use real newline characters (`\n`) so the UI can render line breaks.
+- Prefer numbered steps for sequences and bullets for choices.
+- Include rounds, reps/seconds, rest time, completion threshold, and regression options.
+- Avoid one long sentence such as `計時做 3 輪：1) ...；2) ...；3) ...` when the user needs to read it while doing the task.
+- Do not duplicate the full menu into `description`; keep the menu in `instructions`.
+
+Good `instructions` example:
+
+```text
+計時做 3 輪：
+1. 原地快走 2 分鐘
+2. 側步碰地 45 秒
+3. 站姿開合步 45 秒
+4. 登階/踏台階 60 秒（沒有台階就原地抬膝）
+5. 休息 60 秒
+
+太累就做 2 輪。
+任何膝蓋不適：全改原地快走。
+```
+
+Bad `instructions` example:
+
+```text
+計時做 3 輪：1) 原地快走 2 分鐘；2) 側步碰地 45 秒；3) 站姿開合步 45 秒；4) 登階/踏台階 60 秒；5) 休息 60 秒。太累做 2 輪。
+```
 
 ---
 
