@@ -144,6 +144,10 @@ function TaskCard({
     pending: null,
     in_progress: null,
   }[task.status];
+  const instructions = task.instructions?.trim();
+  const descriptionAlreadyIncludesInstructions = Boolean(
+    instructions && task.description?.includes(instructions),
+  );
 
   return (
     <Card className={disabled ? 'opacity-60' : ''}>
@@ -165,7 +169,14 @@ function TaskCard({
             </div>
 
             {task.description && (
-              <p className="text-xs text-muted-foreground mt-1">{task.description}</p>
+              <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{task.description}</p>
+            )}
+
+            {instructions && !descriptionAlreadyIncludesInstructions && (
+              <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs leading-relaxed">
+                <p className="mb-1 font-medium text-foreground">執行內容</p>
+                <p className="whitespace-pre-line text-muted-foreground">{instructions}</p>
+              </div>
             )}
 
             <div className="flex items-center gap-2 mt-1">
