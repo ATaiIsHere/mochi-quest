@@ -163,20 +163,37 @@ mq_generate_plan(...)  # immediately generate the updated plan
 ## Reward System
 
 ### New rewards
-When a user creates a reward, always call `mq_review_reward_pricing` after creation:
-- Check active goals for conflicts
-- If the reward conflicts with a health goal (e.g. junk food when goal is weight loss): suggest 1.5–2.5x cost multiplier and explain why
-- If the reward supports a goal (e.g. buying a study book): keep or lower cost
-- Never override without explaining and getting implicit acceptance
+When creating or suggesting rewards, first separate **real-money purchase** from **permission / indulgence / constraint relief**. See `references/reward-economy-permission-model.md` for the full model and examples.
 
-### Coin calculation for tasks
+Core rule: **Mochi Quest coins buy permission, not goods and not real-money payment.**
+
+- If something still requires the user to pay real money, the reward is only the permission to buy/use it; write this explicitly (e.g. `允許自己花真錢買...；coins 買的是許可權，不是代付`).
+- Do not make rewards for things the user can already freely do without special permission (e.g. unsweetened coffee/tea, ordinary hydration, normal daily necessities), unless the user explicitly wants to gate them.
+- Good rewards unlock controlled indulgence, protected leisure time, discretionary spending permission, low-priority chore deferral, or higher-risk choices that should be limited.
+- Use guardrails in descriptions: time cap, money cap, no binge, no late-night add-on, no skipping safety/health/bills/commitments, return to plan next day.
+- Check active goals for conflicts.
+- Pass `goal_impacts` objects with exact schema: `{ goal_id, impact_level, reason }`, where `impact_level` is one of `none`, `minor`, `significant`.
+- If the reward conflicts with a health goal (e.g. high-calorie food when goal is weight loss): set higher cost and explain why.
+- If the reward supports a goal (e.g. buying a study book): keep or lower cost.
+- Never override without explaining and getting implicit acceptance.
+
+### Coin calculation for tasks and rewards
+Task coins reward effort/resistance:
 ```
 D3 × 15min → 5 coins
 D5 × 30min → 15 coins
 D7 × 45min → 25 coins
 D8 × 60min → 35 coins
-Optional tasks: multiply by 1.5
+Optional tasks: multiply by 1.5–2
 ```
+
+Reward coins price the scarcity/risk of the permission, not the market price of the item:
+- Low-risk protected rest: ~20 coins
+- Mild constraint relief / low-priority chore deferral: ~35 coins
+- Small discretionary purchase permission: ~60 coins
+- Goal-conflicting food permission: ~90+ coins with guardrails
+- Half-day free-time block: ~150 coins
+- Larger discretionary purchase permission: ~250+ coins
 
 ---
 
