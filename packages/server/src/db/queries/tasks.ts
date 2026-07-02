@@ -40,10 +40,12 @@ export function getTodayTasks(): Task[] {
   const db = getDb();
   const today = new Date().toISOString().slice(0, 10);
 
-  // Get today's pending daily tasks
+  // Get all of today's daily tasks. Completed/skipped tasks still prove that
+  // today's allocation already happened; otherwise completing the last pending
+  // task would make this query look empty and allocate duplicate tasks.
   const existing = db.prepare(`
     SELECT * FROM tasks
-    WHERE task_type = 'daily' AND due_date = ? AND status IN ('pending', 'in_progress')
+    WHERE task_type = 'daily' AND due_date = ?
     ORDER BY goal_id, created_at
   `).all(today);
 
@@ -51,7 +53,7 @@ export function getTodayTasks(): Task[] {
     return (existing as Record<string, unknown>[]).map(parseTask);
   }
 
-  // Allocate today's tasks from template pools
+  // Allocate today's tasks from template pools only when the day has no tasks yet.
   return allocateDailyTasks(today);
 }
 
