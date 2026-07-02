@@ -133,8 +133,25 @@ function allocateDailyTasks(date: string): Task[] {
 export function getOptionalTasks(goalId?: string): Task[] {
   const db = getDb();
   const query = goalId
-    ? `SELECT * FROM tasks WHERE task_type = 'optional' AND status = 'pending' AND goal_id = ? ORDER BY created_at DESC LIMIT 10`
-    : `SELECT * FROM tasks WHERE task_type = 'optional' AND status = 'pending' ORDER BY created_at DESC LIMIT 10`;
+    ? `
+      SELECT tasks.* FROM tasks
+      JOIN plans ON plans.id = tasks.plan_id
+      WHERE tasks.task_type = 'optional'
+        AND tasks.status = 'pending'
+        AND tasks.goal_id = ?
+        AND plans.is_active = 1
+      ORDER BY tasks.created_at DESC
+      LIMIT 10
+    `
+    : `
+      SELECT tasks.* FROM tasks
+      JOIN plans ON plans.id = tasks.plan_id
+      WHERE tasks.task_type = 'optional'
+        AND tasks.status = 'pending'
+        AND plans.is_active = 1
+      ORDER BY tasks.created_at DESC
+      LIMIT 10
+    `;
   const rows = goalId ? db.prepare(query).all(goalId) : db.prepare(query).all();
   return (rows as Record<string, unknown>[]).map(parseTask);
 }
@@ -286,9 +303,13 @@ export function getOptionalCompletionRateLast3Days(goalId: string): number {
   const result = db.prepare(`
     SELECT
       COUNT(*) as total,
-      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+      SUM(CASE WHEN tasks.status = 'completed' THEN 1 ELSE 0 END) as completed
     FROM tasks
-    WHERE goal_id = ? AND task_type = 'optional' AND created_at >= ?
+    JOIN plans ON plans.id = tasks.plan_id
+    WHERE tasks.goal_id = ?
+      AND tasks.task_type = 'optional'
+      AND tasks.created_at >= ?
+      AND plans.is_active = 1
   `).get(goalId, threeDaysAgo) as { total: number; completed: number };
 
   if (!result || result.total === 0) return 0;
